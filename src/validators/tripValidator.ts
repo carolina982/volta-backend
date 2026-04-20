@@ -8,7 +8,8 @@ export const createTripValidator = [
     body("conductorId").notEmpty().withMessage("El ID del conductor es obligatorio"),
     body("unidadId").notEmpty().withMessage("El Id de la unidad es obligatorio"),
     body("estado").optional().isIn(["pendiente", "en progreso", "completado"]).withMessage("Estado no válido"),
-    body("kilometraje").optional().isNumeric().withMessage("El kilometraje debe ser un número"),
+    body("kilometrajeSalida").optional().isNumeric().withMessage("El kilometraje debe ser un número"),
+    body("kilometrajeLlegada").optional().isNumeric().withMessage("El kilometraje debe ser un número"),
     body("acompanante").optional({nullable:true}).isMongoId().withMessage("El ID del acompañante esta vacio"),
     body("def").notEmpty() .withMessage("El def es obligatorio")
 ];
