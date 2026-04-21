@@ -1,7 +1,7 @@
 import mongoose, { Document, Schema } from "mongoose";
 
 export interface ITrip extends Document {
-  Ruta_a_cubrir: string;         
+  rutaAcubrir: string;         
   destino: string;         
   fechaSalida: Date;       
   fechaLlegada: Date;      
@@ -15,7 +15,7 @@ export interface ITrip extends Document {
 }
 const tripSchema = new Schema<ITrip>(
   {
-    Ruta_a_cubrir: { type: String, required: true },
+    rutaAcubrir: { type: String, required: true },
     destino: { type: String, required: true },
     fechaSalida: { type: Date, required: true },
     fechaLlegada: { type: Date, required:false,default:null},
