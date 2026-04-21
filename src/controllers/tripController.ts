@@ -51,14 +51,14 @@ export const getTripById = async (req: Request, res: Response) => {
 
 export const createTrip = async (req: Request, res: Response) => {
   try {
-    const { nombre, unidadId, conductorId, fechaSalida, fechaLlegada, destino, estado, kilometrajeSalida,kilometrajeLlegada, acompanante, def } = req.body;
+    const { Ruta_a_cubrir, unidadId, conductorId, fechaSalida, fechaLlegada, destino, estado, kilometrajeSalida,kilometrajeLlegada, acompanante, def } = req.body;
 
-    if (!nombre||!unidadId||!conductorId||!fechaSalida||!destino||!estado) {
+    if (!Ruta_a_cubrir||!unidadId||!conductorId||!fechaSalida||!destino||!estado) {
       return res.status(400).json({ message: "Faltan campos obligatorios" });
     }
 
     const newTrip = new Trip({
-      nombre,
+      Ruta_a_cubrir,
       unidadId,
       conductorId:new mongoose.Types.ObjectId(conductorId),
       fechaSalida: new Date(fechaSalida),
