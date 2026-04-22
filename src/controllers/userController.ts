@@ -116,8 +116,8 @@ export const loginUser = async (req: Request, res: Response) => {
       apellido: user.apellido,
       email: user.email,
       rol: user.rol,
-      contacto:user.contacto,
       photoUrl: user.photoUrl || null,
+      contacto:user.contacto,
       token,
     });
   } catch (error) {
