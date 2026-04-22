@@ -66,7 +66,7 @@ export const createTrip = async (req: Request, res: Response) => {
       destino,
       estado,
       kilometrajeSalida: Number(kilometrajeSalida) || 0,
-      KilometrajeLlegada:Number(kilometrajeLlegada) || 0,
+      KilometrajeLlegada: Number(kilometrajeLlegada) || 0,
       acompanante: acompanante || null,
       def: def || "",
     });
@@ -91,7 +91,33 @@ export const updateTrip = async (req: Request, res: Response) => {
       return res.status(403).json({message:"No tienes permiso"});
     }
 
-    Object.assign(trip, req.body);
+    const {
+      rutaAcubrir, destino,fechaLlegada,fechaSalida,kilometrajeSalida,kilometrajeLlegada,estado,unidadId,conductorId,acompanante,def
+    }=req.body;
+    if (rutaAcubrir !== undefined)trip.rutaAcubrir=rutaAcubrir;
+    if (destino !== undefined)trip.destino=destino;
+    if (unidadId !== undefined)trip.unidadId=unidadId;
+    if (estado !== undefined)trip.estado=estado;
+    if (def !== undefined)trip.def=def;
+    if (conductorId){
+      trip.conductorId=new mongoose.Types.ObjectId(conductorId);
+    }
+    if (fechaSalida){
+      trip.fechaSalida= new Date (fechaSalida);
+    }
+    if (fechaLlegada){
+      trip.fechaLlegada= new Date(fechaLlegada);
+    }
+    if (kilometrajeSalida ! == undefined){
+      trip.kilometrajeSalida=Number(kilometrajeSalida);
+    }
+    if (kilometrajeLlegada !== undefined){
+      trip.KilometrajeLlegada=Number(kilometrajeSalida);
+    }
+    if (acompanante !== undefined){
+      trip.acompanante=acompanante || null;
+    }
+
     await trip.save();
 
     res.json({ message: "Viaje actualizado", trip });

@@ -8,8 +8,8 @@ export interface ITrip extends Document {
   conductorId: string| mongoose.Types.ObjectId;   
   unidadId:string;      
   estado: string;   
-  kilometrajeSalida?:number;
-  KilometrajeLlegada?:number;
+  kilometrajeSalida?: number;
+  KilometrajeLlegada?: number;
   acompanante:string|null|mongoose.Types.ObjectId;
   def:string;  
 }
@@ -23,7 +23,7 @@ const tripSchema = new Schema<ITrip>(
     unidadId:{type:String , required:true},
     estado: { type: String, enum: ["pendiente", "en progreso", "completado"], default: "pendiente" },
     kilometrajeSalida:{type:Number , default: 0},
-    KilometrajeLlegada:{type:Number , default:0},
+    KilometrajeLlegada:{type:Number ,default: 0},
     acompanante:{type:mongoose.Schema.Types.ObjectId,ref:"User",required:false,default:null},
     def:{type:String , required:true},
     
