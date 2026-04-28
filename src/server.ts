@@ -20,11 +20,10 @@ connectDB();
 
 app.use(cors({
     origin:"*",
-    methods:["GET","POST","PUT","PATCH","DELETE"],
+    methods: ["GET","POST","PUT","PATCH","DELETE"],
     allowedHeaders:["Content-Type","Authorization"],
 }));
 
-app.options("*",cors());
 
 app.use(express.json());
 app.use("/uploads", express.static(path.join(__dirname,"../uploads")));
