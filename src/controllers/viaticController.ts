@@ -27,6 +27,7 @@ export const getViatic= async (req:Request, res:Response)=>{
   }
 };
 
+
 export const getViaticById = async (req:Request , res:Response)=>{
   try {
     const viatic=await Viatico.findById(req.params.id)
@@ -54,6 +55,7 @@ export const getViaticById = async (req:Request , res:Response)=>{
   }
 };
 
+
 export const getViaticByTrip = async (req: Request, res: Response) => {
   try {
     const tripId = req.params.tripId;
@@ -71,6 +73,7 @@ export const getViaticByTrip = async (req: Request, res: Response) => {
     res.status(500).json({ message: "Error al obtener viáticos por viaje" });
   }
 };
+
 
 export const createViatic =async (req:Request, res :Response)=>{
   try {
@@ -114,8 +117,7 @@ export const createViatic =async (req:Request, res :Response)=>{
       console.error("Error al crear viatico",error);
       return res.status(500).json({message:"Error al crear viatico "})
     }
-  }
-
+  };
 
 
 export const updateViatic = async (req:Request, res:Response)=>{
@@ -145,6 +147,7 @@ export const updateViatic = async (req:Request, res:Response)=>{
     res.status(500).json({message:"Error actualizado viatico"});
   }
 };
+
 
  export const deleteViatic = async (req: Request, res: Response) => {
    try {
