@@ -21,7 +21,7 @@ export const createUnit =async (req:Request, res:Response)=>{
 
 export const getUnits =async (req:Request , res:Response)=>{
     try {
-        const units :IUnit[]=await Unit.find().populate("inventarios.conductorId","nombre").sort({createdAt:-1});
+        const units :IUnit[]=await Unit.find().populate("inventarios.conductorId","nombre").sort({createdAt:1});
         res.json(units);
     }catch (error){
         console.error("Error obteniendo unidades" , error),
