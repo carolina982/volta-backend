@@ -20,10 +20,11 @@ router.post("/:id/inventario", upload.single("file"), async (req, res) => {
     if (!req.file) {
       return res.status(400).json({ error: "No se recibio archivo" });
     }
-
-    if (req.file.mimetype !== "application/pdf") {
-      return res.status(400).json({ error: "Solo se permite PDF" });
-    }
+    console.log("mimetype",req.file.mimetype);
+    console.log("FILE",req.file);
+    //if (req.file.mimetype !== "application/pdf") {
+      //return res.status(400).json({ error: "Solo se permite PDF" });
+    //}
     const unit = await Unit.findById(req.params.id);
 
     if (!unit) {
