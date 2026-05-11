@@ -5,13 +5,13 @@ export interface IUnit extends Document {
     placas:string;
     modelo:string;
     capacidad:string;
-    estado:"Disponible" | "Mantenimiento " | "Ocupado";
+    estado:"Disponible" | "Mantenimiento" | "Ocupado";
     tipoRemolque?:"Lowboy" |"Caja Seca" |"";
     placaRemolque?:string;
 
     inventarios?:{
       archivo:string;
-      conductorId:string;
+      conductorId:mongoose.Types.ObjectId;
       fecha:Date;
     }[];
 }
@@ -26,7 +26,7 @@ const uniSchema =new Schema<IUnit> ({
     inventarios:[
       {
         archivo:{type:String, required:true},
-        conductorId:{type:Schema.Types.ObjectId,ref:"Users"},
+        conductorId:{type:Schema.Types.ObjectId,ref:"User"},
         fecha:{type:Date,default:Date.now}
       }
     ],
@@ -45,4 +45,4 @@ uniSchema.set("toJSON", {
 
 
 
-export default  mongoose.model<IUnit> ("unit" , uniSchema);
+export default  mongoose.model<IUnit> ("Unit" , uniSchema);
