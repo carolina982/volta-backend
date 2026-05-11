@@ -13,34 +13,39 @@ router.get("/:id" , getUnitById);
 router.put("/:id",updateUnitValidator,validate,updateUnit);
 router.delete("/:id" , deleteUnit);
 
-router.post("/:id/inventario",upload.single("file"),async (req ,res)=>{
-    try {
-        const {conductorId}=req.body;
-        if (!req.file){
-            return res.status(400).json({error:"No se recibio archivo"});
-        }
-        if (req.file.mimetype ! == "application/pdf"){
-            return res.status(400).json({error:"Solo se permite PDF"})
-        }
-        const unit=await Unit.findById(req.params.id);
-        if (!unit){
-            return res.status(404).json({error:"Unidad no encontrada"});
-        }
-        if (!unit.inventarios){
-            unit.inventarios=[];
-        }
-        const fileUrl=`${req.protocol}://${req.get("host")}/uploads/${req.file.path}`;
-        unit.inventarios?.push({
-            archivo:fileUrl,
-            conductorId,
-            fecha:new Date()
-        });
-        await unit.save();
-        res.json({ok:true,inventarios:unit.inventarios});
-    }catch (error){
-        console.error("ERROR INVENTARIO",error);
-        res.status(500).json({error:"Error subiendo archivo"});
+
+router.post("/:id/inventario", upload.single("file"), async (req, res) => {
+  try {
+    const { conductorId } = req.body;
+    if (!req.file) {
+      return res.status(400).json({ error: "No se recibio archivo" });
     }
+
+    if (req.file.mimetype !== "application/pdf") {
+      return res.status(400).json({ error: "Solo se permite PDF" });
+    }
+    const unit = await Unit.findById(req.params.id);
+
+    if (!unit) {
+      return res.status(404).json({ error: "Unidad no encontrada" });
+    }
+
+    if (!unit.inventarios) {
+      unit.inventarios = [];
+    }
+
+    const fileUrl = `${req.protocol}://${req.get("host")}/${req.file.path}`;
+    unit.inventarios.push({ archivo: fileUrl, conductorId, fecha: new Date(), });
+    await unit.save();
+
+    res.json({ ok: true, inventarios: unit.inventarios, });
+  } catch (error) {
+    console.error("ERROR INVENTARIO", error);
+
+    res.status(500).json({
+      error: "Error subiendo archivo",
+    });
+  }
 });
 
 router.delete("/:unitId/inventarios/:inventarioId", async (req ,res)=>{
