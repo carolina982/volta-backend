@@ -36,7 +36,7 @@ router.post("/:id/inventario", upload.single("file"), async (req, res) => {
       unit.inventarios = [];
     }
 
-    const fileUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.path}`;
+    const fileUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
     unit.inventarios.push({ archivo: fileUrl, conductorId, fecha: new Date(), });
     await unit.save();
 
