@@ -19,8 +19,9 @@ router.post("/:id/inventario", upload.single("file"), async (req, res) => {
     const { conductorId } = req.body;
     if (!req.file) {
       return res.status(400).json({ error: "No se recibio archivo" });
-    }
-    console.log("mimetype",req.file.mimetype);
+    };
+
+    console.log("MIMETYPE",req.file.mimetype);
     console.log("FILE",req.file);
     //if (req.file.mimetype !== "application/pdf") {
       //return res.status(400).json({ error: "Solo se permite PDF" });
