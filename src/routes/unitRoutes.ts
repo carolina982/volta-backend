@@ -11,6 +11,30 @@ router.post ("/",createUnitValidator,validate,createUnit);
 router.get("/", getUnits);
 router.get("/:id" , getUnitById);
 router.put("/:id",updateUnitValidator,validate,updateUnit);
+router.post("/:id/image",upload.single("image"), async(req ,res)=>{
+  try{
+    if (!req.file){
+      return res.status(400).json({
+        error:"No se recibio imagen",
+      });
+    }
+    const unit =await Unit.findById(req.params.id);
+    if (!unit){
+      return res.status(404).json({error:"Unidad no econtrada",});
+    }
+    const imagenUrl =`${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+    unit.imagenUrl=imagenUrl;
+    await unit.save();
+    res.json({
+      ok:true,
+      imagenUrl:imagenUrl,
+    });
+  }catch (error){
+    console.error(error);
+    res.status(500).json({error:"Error subiendo imagen"});
+  }
+}
+);
 router.delete("/:id" , deleteUnit);
 
 

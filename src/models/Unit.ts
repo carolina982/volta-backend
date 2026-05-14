@@ -8,6 +8,7 @@ export interface IUnit extends Document {
     estado:"Disponible" | "Mantenimiento" | "Ocupado";
     tipoRemolque?:"Lowboy" |"Caja Seca" |"";
     placaRemolque?:string;
+    imagenUrl:string;
 
     inventarios?:{
       archivo:string;
@@ -23,6 +24,7 @@ const uniSchema =new Schema<IUnit> ({
     estado:{type:String , enum:["Disponible" , "Mantenimiento" , "Ocupado"]},
     tipoRemolque:{type:String, enum:["Lowboy","Caja Seca",""],default:""},
     placaRemolque:{type:String,default:""},
+    imagenUrl:{type:String,default:""},
     inventarios:[
       {
         archivo:{type:String, required:true},
