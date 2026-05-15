@@ -22,7 +22,9 @@ connectDB();
 const uploadsPath="/opt/render/project/src/uploads";
 if (!fs.existsSync(uploadsPath)){
   fs.mkdirSync(uploadsPath,{recursive:true});
-}
+};
+
+
 app.use(cors({
   origin: "*",
   methods: ["GET","POST","PUT","PATCH","DELETE","OPTIONS"],
