@@ -106,13 +106,14 @@ export const registerUser =async (req:Request , res:Response)=>{
 // Login usuario
 export const loginUser = async (req: Request, res: Response) => {
   const { email, password } = req.body;
+  const cleanEmail=email.trim().toLowerCase();
   console.log("Datos recibidos en login",{email,password});
   if (!email || !password) {
     return res.status(400).json({ message: "Faltan datos" });
   }
 
   try {
-    const user = await User.findOne({ email: email.toLowerCase() });
+    const user = await User.findOne({ email: cleanEmail});
     console.log("Email",email);
     console.log("user:",user);
     if (!user) {
