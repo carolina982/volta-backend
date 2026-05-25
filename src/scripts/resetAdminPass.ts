@@ -1,24 +1,29 @@
 import bcrypt from "bcryptjs";
-import mongoose from "mongoose";
-import { MONGO_URI } from "../config/config";
+import express from "express";
 import User from "../models/User";
 
-(async ()=> {
-    try {
-        console.log("Conectando a MongoDB...");
-        await mongoose.connect(MONGO_URI);
-        const newPassword ="carol123";
-        const newHash =await bcrypt.hash(newPassword ,10);
-        const result =await User.updateOne(
-            {email:"patriciocarolina@gmail.com"},
-            {$set:{password:newHash}}
-        );
-        console.log("Resultados de actualizacin",result);
-        console.log(`Contraseña del admin actualizada a :${newPassword}`);
-    }catch (error){
-        console.error("Error al rsetear contraseña",error);
-    }finally{
-        await mongoose.disconnect();
-        console.log("Desconectado de MongoDB");
+const router = express.Router();
+router.post("/reset-password", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ message: "Faltan datos" });
     }
-})();
+    const hash = await bcrypt.hash(password, 10);
+    const result = await User.updateOne(
+      { email },
+      { $set: { password: hash } }
+    );
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ message: "Usuario no encontrado" });
+    }
+    res.json({
+      message: "Contraseña actualizada correctamente",
+      modified: result.modifiedCount,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error del servidor" });
+  }
+});
+export default router;

@@ -113,12 +113,17 @@ export const loginUser = async (req: Request, res: Response) => {
 
   try {
     const user = await User.findOne({ email: email.toLowerCase() });
+    console.log("Email",email);
+    console.log("user:",user);
     if (!user) {
-      console.log("Usuario no econtrado");
       return res.status(401).json({ message: "Usuario o contraseña incorrectos" });
+    
     }
     console.log("usuario econtrado", user.email);
+    console.log("password input",password);
+    console.log("password hash",user.password);
     const isMatch = await bcrypt.compare(password, user.password);
+    console.log("match",match);
     if (!isMatch) {
       console.log("contraseña incorrecta");
       return res.status(401).json({ message: "Usuario o contraseña incorrectos" });
