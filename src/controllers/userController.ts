@@ -123,7 +123,7 @@ export const loginUser = async (req: Request, res: Response) => {
     console.log("password input",password);
     console.log("password hash",user.password);
     const isMatch = await bcrypt.compare(password, user.password);
-    console.log("match",match);
+    console.log("match",isMatch);
     if (!isMatch) {
       console.log("contraseña incorrecta");
       return res.status(401).json({ message: "Usuario o contraseña incorrectos" });
