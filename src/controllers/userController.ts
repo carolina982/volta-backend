@@ -34,21 +34,26 @@ export const getUserById = async (req: Request, res: Response) => {
 };
 
 export const createUser = async (req: Request, res: Response) => {
-  const { nombre, email, password, rol } = req.body;
-  if (!nombre || !email || !password || !rol) {
+  const { nombre, email, password, rol, contacto } = req.body;
+  if (!nombre || !email || !password || !rol || !contacto) {
     return res.status(400).json({ message: "Faltan datos" });
   }
   try {
     const existingUser = await User.findOne({ email });
-    if (existingUser) return res.status(400).json({ message: "Usuario ya existe" });
-
+    if (existingUser) {
+      return res.status(400).json({
+        message: "Usuario ya existe"
+      });
+    }
     const hashedPassword = await bcrypt.hash(password, 10);
-    const user = await User.create({ nombre, email, password: hashedPassword, rol });
-
+    const user = await User.create({nombre,email,password: hashedPassword,rol,contacto});
     return res.status(201).json(user);
   } catch (error) {
     console.error("Error creando usuario:", error);
-    return res.status(500).json({ message: "Error creando usuario", error });
+    return res.status(500).json({
+      message: "Error creando usuario",
+      error
+    });
   }
 };
 
@@ -65,7 +70,8 @@ export const registerUser =async (req:Request , res:Response)=>{
     }
     const existingUser =await User.findOne({email:email.toLowerCase()});
     if (existingUser){
-      return res.status(400).json({message:"Usiario ya existe"});
+      return res.status(400).json({message:"Usuario ya existe"});
+    
     }
     const hashedPassword =await bcrypt.hash(password,10);
     const newUser = new User ({nombre,
