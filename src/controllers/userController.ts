@@ -49,12 +49,12 @@ export const createUser = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Usuario ya existe" });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    
 
     const user = await User.create({
       nombre,
       email: email.toLowerCase(),
-      password: hashedPassword,
+      password,
       rol,
       contacto,
     });
@@ -83,13 +83,13 @@ export const registerUser = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Usuario ya existe" });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    
 
     const newUser = await User.create({
       nombre,
       apellido,
       email: email.toLowerCase(),
-      password: hashedPassword,
+      password,
       rol,
       contacto,
       photoUrl: req.file ? `/uploads/${req.file.filename}` : null,
@@ -243,8 +243,8 @@ export const resetPassword =async (req:Request, res:Response) =>{
     if (!user){
       return res.status(400).json({message:"Token invalido o expirado"});
     }
-    const hashed=await bcrypt.hash(password,10);
-    user.password=hashed;
+   
+    user.password=password;
     user.resetToken=undefined;
     user.resetTokenExp=undefined;
     await user.save();
