@@ -34,35 +34,41 @@ export const getUserById = async (req: Request, res: Response) => {
 };
 
 export const createUser = async (req: Request, res: Response) => {
-  const { nombre, email, password, rol, contacto } = req.body;
-
-  if (!nombre || !email || !password || !rol || !contacto) {
-    return res.status(400).json({ message: "Faltan datos" });
-  }
-
-  try {
-    const existingUser = await User.findOne({
-      email: email.toLowerCase(),
-    });
-
-    if (existingUser) {
-      return res.status(400).json({ message: "Usuario ya existe" });
+  try{
+  const { nombre,apellido, email, password, rol, contacto } = req.body;
+  if (!nombre || !rol ||!apellido ){
+    return res.status(400).json({
+      message:"Nombre ,apellido y rol son obligatorios"
+    })
+  } 
+  if (rol === "admin"){
+    if (!email || !password){
+      return res.status(400).json({
+        message:"Admin require correo y contrasña"
+      });
     }
-
-    
-
-    const user = await User.create({
-      nombre,
-      email: email.toLowerCase(),
-      password,
-      rol,
-      contacto,
+    const existingUser=await User.findOne({
+      email:email.toLowerCase()
     });
-
-    return res.status(201).json(user);
-  } catch (error) {
-    console.error("Error creando usuario:", error);
-    return res.status(500).json({ message: "Error creando usuario" });
+    if (existingUser){
+      return res.status(400).json({
+        message:"Usuario ya exite"
+      });
+    }
+  }
+  const user =await User.create({
+    nombre,
+    apellido,
+    email:email || undefined,
+    password:password || undefined, 
+    rol
+  });
+  return res.status(201).json(user);
+  }catch (error){
+    console.error("Error creando usuario ",error);
+    return res.status(500).json({
+      message:"Error creando usuario"
+    });
   }
 };
 
@@ -116,6 +122,7 @@ export const registerUser = async (req: Request, res: Response) => {
     return res.status(500).json({ message: "Error interno del servidor" });
   }
 };
+
 
 // Login usuario
 export const loginUser = async (req: Request, res: Response) => {
