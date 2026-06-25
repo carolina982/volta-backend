@@ -41,28 +41,34 @@ export const createUser = async (req: Request, res: Response) => {
       message:"Nombre ,apellido y rol son obligatorios"
     })
   } 
-  if (rol === "admin"){
-    if (!email || !password){
-      return res.status(400).json({
-        message:"Admin require correo y contrasña"
-      });
-    }
-    const existingUser=await User.findOne({
-      email:email.toLowerCase()
+  const role = rol.toLowerCase();
+
+if (role === "admin") {
+  if (!email || !password) {
+    return res.status(400).json({
+      message: "Admin requiere correo y contraseña"
     });
-    if (existingUser){
-      return res.status(400).json({
-        message:"Usuario ya exite"
-      });
-    }
   }
-  const user =await User.create({
-    nombre,
-    apellido,
-    email:email || undefined,
-    password:password || undefined, 
-    rol
+
+  const existingUser = await User.findOne({
+    email: email.toLowerCase()
   });
+
+  if (existingUser) {
+    return res.status(400).json({
+      message: "Usuario ya existe"
+    });
+  }
+}
+
+const user = await User.create({
+  nombre,
+  apellido,
+  rol: role,
+  email: email ? email.toLowerCase() : undefined,
+  password: password || undefined,
+  contacto
+});
   return res.status(201).json(user);
   }catch (error){
     console.error("Error creando usuario ",error);
