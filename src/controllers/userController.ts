@@ -33,47 +33,42 @@ export const getUserById = async (req: Request, res: Response) => {
   }
 };
 
+
+
 export const createUser = async (req: Request, res: Response) => {
-  try{
-  const { nombre,apellido, email, password, rol, contacto } = req.body;
-  if (!nombre || !rol ||!apellido ){
-    return res.status(400).json({
-      message:"Nombre ,apellido y rol son obligatorios"
-    })
-  } 
-  const role = rol.toLowerCase();
+  try {
+    const { nombre, apellido, email, password, rol, contacto } = req.body;
 
-if (role === "admin") {
-  if (!email || !password) {
-    return res.status(400).json({
-      message: "Admin requiere correo y contraseña"
+    if (!nombre || !apellido || !rol) {
+      return res.status(400).json({
+        message: "Nombre, apellido y rol son obligatorios"
+      });
+    }
+
+    const existingUser = await User.findOne({
+      email: email?.toLowerCase()
     });
-  }
 
-  const existingUser = await User.findOne({
-    email: email.toLowerCase()
-  });
+    if (existingUser) {
+      return res.status(400).json({
+        message: "Usuario ya existe"
+      });
+    }
 
-  if (existingUser) {
-    return res.status(400).json({
-      message: "Usuario ya existe"
+    const user = await User.create({
+      nombre,
+      apellido,
+      rol, //  NO transformes
+      email: email ? email.toLowerCase() : undefined,
+      password,
+      contacto
     });
-  }
-}
 
-const user = await User.create({
-  nombre,
-  apellido,
-  rol: role,
-  email: email ? email.toLowerCase() : undefined,
-  password: password || undefined,
-  contacto
-});
-  return res.status(201).json(user);
-  }catch (error){
-    console.error("Error creando usuario ",error);
+    return res.status(201).json(user);
+  } catch (error) {
+    console.error("Error creando usuario:", error);
     return res.status(500).json({
-      message:"Error creando usuario"
+      message: "Error creando usuario"
     });
   }
 };
