@@ -39,32 +39,47 @@ export const createUser = async (req: Request, res: Response) => {
   try {
     const { nombre, apellido, email, password, rol, contacto } = req.body;
 
+    // validación base
     if (!nombre || !apellido || !rol) {
       return res.status(400).json({
         message: "Nombre, apellido y rol son obligatorios"
       });
     }
 
-    const existingUser = await User.findOne({
-      email: email?.toLowerCase()
-    });
-
-    if (existingUser) {
+    // validar rol 
+    const rolesPermitidos = ["Admin", "Operador", "Ayudante General"];
+    if (!rolesPermitidos.includes(rol)) {
       return res.status(400).json({
-        message: "Usuario ya existe"
+        message: "Rol inválido"
       });
     }
 
+    // SOLO buscar usuario si hay email
+    let existingUser = null;
+    if (email) {
+      existingUser = await User.findOne({
+        email: email.toLowerCase()
+      });
+
+      if (existingUser) {
+        return res.status(400).json({
+          message: "Usuario ya existe"
+        });
+      }
+    }
+
+    // crear usuario
     const user = await User.create({
       nombre,
       apellido,
-      rol, //  NO transformes
+      rol,
       email: email ? email.toLowerCase() : undefined,
-      password,
+      password: password || undefined,
       contacto
     });
 
     return res.status(201).json(user);
+
   } catch (error) {
     console.error("Error creando usuario:", error);
     return res.status(500).json({
