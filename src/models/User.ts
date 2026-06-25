@@ -4,7 +4,7 @@ import mongoose, { Document, Schema } from "mongoose";
 export  interface IUser extends Document {
  nombre :string ;
  apellido:string;
- email?:string;
+ email:string;
  password:string ;
  rol:string; 
  contacto:string;
@@ -14,12 +14,11 @@ export  interface IUser extends Document {
  comparePassword(password:string):Promise<boolean>;
 
 }
-
 const userSchema  = new Schema <IUser>({
     nombre:{type:String , required :true},
     apellido:{type:String},
-    email:{type:String, unique:true, sparse:true,default:undefined},
-    password:{type:String,default:undefined},
+    email:{type:String, unique:true, sparse:true},
+    password:{type:String},
     rol:{type:String, enum:["Admin","Operador","Ayudante General"],
         required:true
     },
