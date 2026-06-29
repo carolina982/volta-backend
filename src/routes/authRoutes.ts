@@ -1,17 +1,26 @@
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import { Router } from "express";
 import jwt from "jsonwebtoken";
-import { JWT_SECRET } from "../config/config";
+import { EMAIL_USER, JWT_SECRET } from "../config/config";
+import { transporter } from "../config/mailer";
 import Trip from "../models/Trip";
 import User from "../models/User";
+;
 
 
 
 const router = Router();
 
-let resetToken = "123456789";
+let resetToken="";
+
+const generateResetCode=()=>{
+  return crypto.randomInt(100000,999999).toString();
+};
+
 console.log("authRoutes cargando correctamente");
 // REGISTER
+
 router.put("/trips/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -96,30 +105,38 @@ router.post("/login", async (req, res) => {
 });
 
 // FORGOT PASSWORD
-router.post("/forgot-password", async (req, res) => {
+
+router.post ("/forgot-password",async (req,res)=>{
   try {
-    const { email } = req.body;
-
-    if (!email) {
-      return res.status(400).json({ message: "Email requerido" });
+    const {email}=req.body;
+    if (!email){
+      return res.status(400).json({message:"Email requerido"});
     }
-
-    const user = await User.findOne({ email: email.trim().toLowerCase() });
-
-    if (!user) {
-      return res.status(404).json({ message: "Usuario no encontrado" });
-    }
-
-    console.log(`Token para ${email}: ${resetToken}`);
-
-    return res.json({
-      message: "Código enviado",
-      token: resetToken,
+    const user =await User.findOne({
+      email:email.trim().toLowerCase(),
     });
-
-  } catch (error) {
-    console.error("Error en forgot-password", error);
-    return res.status(500).json({ message: "Error del servidor" });
+    if (!user){
+      return res.status(404).json({
+        message:"Usuario no econtrado"
+      });
+    }
+    //genera el codigo 
+    resetToken=generateResetCode();
+    //envia codigo 
+    await transporter.sendMail({
+      from:EMAIL_USER,
+      to:email,
+      subject:"Recuperacion de contraseña",
+      text:`Tu codigo de recuperacion es :${resetToken}`,
+    });
+    return res.json({
+      message:"Codigo enviado correctamente",
+    });
+  }catch (error){
+    console.error("Error en forgot-passord",error);
+    return res.status(500).json({
+      message:"No se pudo enviar el correo"
+    });
   }
 });
 
