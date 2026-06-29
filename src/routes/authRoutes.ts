@@ -165,19 +165,22 @@ router.post("/reset-password", async (req, res) => {
       return res.status(400).json({ message: "Faltan datos" });
     }
 
-    if (token !== resetToken) {
-      return res.status(400).json({ message: "Token inválido" });
-    }
-
-    const user = await User.findOne({ email: email.trim().toLowerCase() });
+    const user = await User.findOne({
+      email: email.trim().toLowerCase(),
+      resetToken: token,
+      resetTokenExp: { $gt: new Date() },
+    });
 
     if (!user) {
-      return res.status(404).json({ message: "Usuario no encontrado" });
+      return res.status(400).json({ message: "Token inválido o expirado" });
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
     user.password = hashedPassword;
+    user.resetToken = undefined;
+    user.resetTokenExp = undefined;
+
     await user.save();
 
     return res.json({
