@@ -127,7 +127,7 @@ router.post("/forgot-password", async (req, res) => {
 
     //  guardar token en DB
     user.resetToken = resetToken;
-    user.resetTokenExp = Date.now() + 10 * 60 * 1000; // 10 min
+    user.resetTokenExp= new Date(Date.now() +10 *60*1000);
     await user.save();
 
     // enviar correo
