@@ -170,9 +170,11 @@ export const loginUser = async (req: Request, res: Response) => {
         message:"Este usuario no tiene acceso al inicio se sion "
       })
     }
-
+    console.log("Email recibido",email);
+    console.log("Password recibida",password);
+    console.log("password guardada",user.password);
     const isMatch = await bcrypt.compare(password, user.password);
-
+    console.log("coincide",isMatch);
     if (!isMatch) {
       return res.status(401).json({
         message: "Usuario o contraseña incorrectos",
@@ -273,25 +275,25 @@ export const forgotPassword = async (req: Request, res: Response) => {
   }
 };
 
-export const resetPassword =async (req:Request, res:Response) =>{
-  const {token}=req.params;
-  const {password}=req.body;
+export const resetPassword = async (req: Request, res: Response) => {
+  const { token } = req.params;
+  const { password } = req.body;
   try {
-    const user =await User.findOne ({resetToken:token,
-      resetTokenExp:{$gt:new Date ()},
+    const user = await User.findOne({
+      resetToken: token,
+      resetTokenExp: { $gt: new Date() },
     });
-    if (!user){
-      return res.status(400).json({message:"Token invalido o expirado"});
+    if (!user) {
+      return res.status(400).json({ message: "Token inválido o expirado" });
     }
-   
-    user.password=password;
-    user.resetToken=undefined;
-    user.resetTokenExp=undefined;
+    const hashedPassword = await bcrypt.hash(password, 10);
+    user.password = hashedPassword;
+    user.resetToken = undefined;
+    user.resetTokenExp = undefined;
     await user.save();
-
-    res.json({message:"Contraseña restablecidad correctamente"});
-  }catch (error){
+    res.json({ message: "Contraseña restablecida correctamente" });
+  } catch (error) {
     console.error("Error en resetPassword", error);
-    res.status(500).json({message:"Error al restablecer contraseña"});
+    res.status(500).json({ message: "Error al restablecer contraseña" });
   }
 };
