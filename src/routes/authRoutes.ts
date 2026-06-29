@@ -2,8 +2,8 @@ import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { Router } from "express";
 import jwt from "jsonwebtoken";
-import { EMAIL_USER, JWT_SECRET } from "../config/config";
-import { transporter } from "../config/mailer";
+import { EMAIL_FROM, JWT_SECRET } from "../config/config";
+import { resend } from "../config/resend";
 import Trip from "../models/Trip";
 import User from "../models/User";
 
@@ -131,13 +131,18 @@ router.post("/forgot-password", async (req, res) => {
     await user.save();
 
     // enviar correo
-    await transporter.sendMail({
-      from: EMAIL_USER,
-      to: email,
+    await resend.emails.send({
+      from:` Volta App <${EMAIL_FROM}>`,
+      to:"al222010146@gmail.com",
       subject: "Recuperación de contraseña",
-      text: `Tu código de recuperación es: ${resetToken}`,
-    });
+      html: `
+       <h2>Recuperación de contraseña</h2>
+        <p>Tu código de recuperación es:</p>
+        <h1>${resetToken}</h1>
+        <p>Este código expira en 10 minutos.</p>
+      `,
 
+    })
     return res.json({
       message: "Código enviado correctamente",
     });
