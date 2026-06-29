@@ -1,15 +1,15 @@
 import nodemailer from "nodemailer";
 import { EMAIL_PASS, EMAIL_USER } from "./config";
 
-console.log("EMAIL_USER",EMAIL_USER);
-console.log("EMAIL_PASS",EMAIL_PASS ?"cargada":"Vacia")
-
 export const transporter=nodemailer.createTransport({
-    service:"gmail",
+    host:"smtp.gmail.com",
+    port:587,
+    secure:false,
     auth:{
         user:EMAIL_USER,
         pass:EMAIL_PASS?.trim(),
     },
-    
-    
-});
+    tls:{
+        rejectUnauthorized:false,
+    },
+})
