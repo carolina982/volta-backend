@@ -38,8 +38,10 @@ userSchema.pre("save",async function(next){
     next();
 })
 
+
 userSchema.methods.comparePassword=function(password:string){
+    if (!this.password) return false;
     return bcrypt.compare(password,this.password);
-};
+}
 
 export default  mongoose.model <IUser>("User" , userSchema);

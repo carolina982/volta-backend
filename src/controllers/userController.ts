@@ -165,6 +165,12 @@ export const loginUser = async (req: Request, res: Response) => {
       });
     }
 
+    if (!user.password){
+      return res.status(401).json({
+        message:"Este usuario no tiene acceso al inicio se sion "
+      })
+    }
+
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
@@ -197,16 +203,21 @@ export const loginUser = async (req: Request, res: Response) => {
   
 export const updateUser=  async (req:Request, res:Response)=>{
   try {
-    const {nombre,apellido,email,rol,contacto}=req.body;
-    const updateData: any ={nombre, apellido,email, rol,contacto};
-    if (req.file){
-      updateData.photoUrl =`/uploads/${req.file.filename}`;}
-    const user =await User.findByIdAndUpdate(req.params.id,updateData,{new:true});
-    if (!user){
-      return res.status(404).json({message:"Usuario no econtrado"});}
-    res.json(user);
-  }catch (error){
-    console.error("Error al actualizar usuario", error);
+   const { nombre,apellido,email,password,rol,contacto} = req.body;
+   const updateData: any = {nombre,apellido,email,rol,contacto,};
+   if (password) {
+    updateData.password = await bcrypt.hash(password, 10);
+   }
+   if (req.file) {
+  updateData.photoUrl = `/uploads/${req.file.filename}`;
+}
+const user = await User.findByIdAndUpdate(
+  req.params.id,
+  updateData,
+  { new: true }
+);
+}catch (error){
+   console.error("Error al actualizar usuario", error);
     res.status(500).json({message:"Error al actualizar usuario"});
   }
 };

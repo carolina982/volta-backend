@@ -6,6 +6,7 @@ import Trip from "../models/Trip";
 import User from "../models/User";
 
 
+
 const router = Router();
 
 let resetToken = "123456789";
