@@ -10,9 +10,8 @@ export  interface IUser extends Document {
  contacto:string;
  photoUrl?:string|null;
  resetToken?:string;
- resetTokenExp?:Date;
+ resetTokenExp?:Number;
  comparePassword(password:string):Promise<boolean>;
-
 }
 const userSchema  = new Schema <IUser>({
     nombre:{type:String , required :true},

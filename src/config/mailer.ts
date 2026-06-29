@@ -1,9 +1,13 @@
 import nodemailer from "nodemailer";
+import { EMAIL_PASS, EMAIL_USER } from "./config";
 
-export const  transporter=nodemailer.createTransport({
+console.log("EMAIL_USER",EMAIL_USER);
+console.log("EMAIL_PASS",EMAIL_PASS ?"cargada":"Vacia")
+
+export const transporter=nodemailer.createTransport({
     service:"gmail",
     auth:{
-        user:"",
-        pass:""
-    }
-})
+        user:EMAIL_USER,
+        pass:EMAIL_PASS,
+    },
+});

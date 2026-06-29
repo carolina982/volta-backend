@@ -6,7 +6,6 @@ import { EMAIL_USER, JWT_SECRET } from "../config/config";
 import { transporter } from "../config/mailer";
 import Trip from "../models/Trip";
 import User from "../models/User";
-;
 
 
 
@@ -105,40 +104,57 @@ router.post("/login", async (req, res) => {
 });
 
 // FORGOT PASSWORD
-
-router.post ("/forgot-password",async (req,res)=>{
+router.post("/forgot-password", async (req, res) => {
   try {
-    const {email}=req.body;
-    if (!email){
-      return res.status(400).json({message:"Email requerido"});
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ message: "Email requerido" });
     }
-    const user =await User.findOne({
-      email:email.trim().toLowerCase(),
+
+    const user = await User.findOne({
+      email: email.trim().toLowerCase(),
     });
-    if (!user){
+
+    if (!user) {
       return res.status(404).json({
-        message:"Usuario no econtrado"
+        message: "Usuario no encontrado",
       });
     }
-    //genera el codigo 
-    resetToken=generateResetCode();
-    //envia codigo 
+
+    //  generar código correctamente
+    const resetToken = generateResetCode();
+
+    //  guardar token en DB
+    user.resetToken = resetToken;
+    user.resetTokenExp = Date.now() + 10 * 60 * 1000; // 10 min
+    await user.save();
+
+    // enviar correo
     await transporter.sendMail({
-      from:EMAIL_USER,
-      to:email,
-      subject:"Recuperacion de contraseña",
-      text:`Tu codigo de recuperacion es :${resetToken}`,
+      from: EMAIL_USER,
+      to: email,
+      subject: "Recuperación de contraseña",
+      text: `Tu código de recuperación es: ${resetToken}`,
     });
+
     return res.json({
-      message:"Codigo enviado correctamente",
+      message: "Código enviado correctamente",
     });
-  }catch (error){
-    console.error("Error en forgot-passord",error);
+  } catch (error:any) {
+    console.log("erro full");
+    console.dir(error,{depth:null});
+    console.log("Code",error?.code);
+    console.log("Response",error?.response);
+    console.log("Response code",error?.responseCode)
+    console.error("Error en forgot-password:", error);
     return res.status(500).json({
-      message:"No se pudo enviar el correo"
+      message: "No se pudo enviar el correo",
+      error: (error as any).message,
     });
   }
 });
+
 
 // RESET PASSWORD
 router.post("/reset-password", async (req, res) => {
