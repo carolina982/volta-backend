@@ -173,7 +173,7 @@ export const loginUser = async (req: Request, res: Response) => {
     console.log("Email recibido",email);
     console.log("Password recibida",password);
     console.log("password guardada",user.password);
-    const isMatch = await bcrypt.compare(password, user.password);
+     const isMatch=await user.comparePassword(password);
     console.log("coincide",isMatch);
     if (!isMatch) {
       return res.status(401).json({

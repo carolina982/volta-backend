@@ -18,7 +18,7 @@ const userSchema  = new Schema <IUser>({
     nombre:{type:String , required :true},
     apellido:{type:String},
     email:{type:String, unique:true, sparse:true},
-    password:{type:String},
+    password:{type:String,required:true},
     rol:{type:String, enum:["Admin","Operador","Ayudante General"],
         required:true
     },
@@ -30,14 +30,13 @@ const userSchema  = new Schema <IUser>({
  {timestamps:true}
 );
 
-userSchema.pre("save",async function(next){
-    if (!this.password) return next();
-    if (!this.isModified("password"))return next();
-    const salt=await bcrypt.genSalt(10);
-    this.password=await bcrypt.hash(this.password,salt);
-    next();
+userSchema.pre("findOneAndUpdate",async function (next){
+    const update=this.getUpdate() as any;
+    if (update.password){
+        const salt =await bcrypt.genSalt(10);
+        update.password=await bcrypt.hash(update.password,salt);
+    }
 })
-
 
 userSchema.methods.comparePassword=function(password:string){
     if (!this.password) return false;
