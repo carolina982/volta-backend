@@ -67,20 +67,25 @@ export const createTrip = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Faltan campos obligatorios" });
     }
 
-    const newTrip = new Trip({
-      rutaAcubrir,
-      unidadId,
-      conductorId: new mongoose.Types.ObjectId(conductorId),
-      fechaSalida: new Date(fechaSalida),
-      fechaLlegada: fechaLlegada ? new Date(fechaLlegada) : null,
-      destino,
-      estado,
-      // Se asigna el arreglo directamente si existe, si no, se inicializa vacío []
-      kilometrajeSalida: Array.isArray(kilometrajeSalida) ? kilometrajeSalida : [],
-      kilometrajeLlegada: Array.isArray(kilometrajeLlegada) ? kilometrajeLlegada : [],
-      acompanante: acompanante || null,
-      def: def || "",
-    });
+    // ... dentro de createTrip
+const newTrip = new Trip({
+  rutaAcubrir,
+  unidadId,
+  conductorId: new mongoose.Types.ObjectId(conductorId),
+  fechaSalida: new Date(fechaSalida),
+  fechaLlegada: fechaLlegada ? new Date(fechaLlegada) : null,
+  destino,
+  estado,
+  // Limpiamos los arrays para asegurarnos que solo tengan lo que el esquema espera
+  kilometrajeSalida: Array.isArray(kilometrajeSalida) 
+    ? kilometrajeSalida.map(item => ({ numero: Number(item.numero), descripcion: item.descripcion || "" })) 
+    : [],
+  kilometrajeLlegada: Array.isArray(kilometrajeLlegada) 
+    ? kilometrajeLlegada.map(item => ({ numero: Number(item.numero), descripcion: item.descripcion || "" })) 
+    : [],
+  acompanante: (acompanante === "none" || acompanante === "") ? null : acompanante,
+  def: def || "",
+});
 
     await newTrip.save();
     res.status(201).json(newTrip);
