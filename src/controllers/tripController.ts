@@ -117,36 +117,33 @@ export const updateTrip = async (req: Request, res: Response) => {
       def
     } = req.body;
 
+    
     if (rutaAcubrir !== undefined) trip.rutaAcubrir = rutaAcubrir;
     if (destino !== undefined) trip.destino = destino;
     if (unidadId !== undefined) trip.unidadId = unidadId;
     if (estado !== undefined) trip.estado = estado;
     if (def !== undefined) trip.def = def;
     
-    if (conductorId) {
-      trip.conductorId = new mongoose.Types.ObjectId(conductorId);
-    }
-    if (fechaSalida) {
-      trip.fechaSalida = new Date(fechaSalida);
-    }
-    if (fechaLlegada) {
-      trip.fechaLlegada = new Date(fechaLlegada);
+    if (conductorId) trip.conductorId = new mongoose.Types.ObjectId(conductorId);
+    if (fechaSalida) trip.fechaSalida = new Date(fechaSalida);
+    if (fechaLlegada) trip.fechaLlegada = new Date(fechaLlegada);
+    if (acompanante !== undefined) trip.acompanante = acompanante || null;
+    
+    
+    if (Array.isArray(kilometrajeSalida)) {
+      trip.kilometrajeSalida = kilometrajeSalida;
+      trip.markModified('kilometrajeSalida');
     }
     
-    if (kilometrajeSalida !== undefined) {
-      trip.kilometrajeSalida = kilometrajeSalida;
-    }
-    if (kilometrajeLlegada !== undefined) {
+    if (Array.isArray(kilometrajeLlegada)) {
       trip.kilometrajeLlegada = kilometrajeLlegada;
-    }
-    if (acompanante !== undefined) {
-      trip.acompanante = acompanante || null;
+      trip.markModified('kilometrajeLlegada'); 
     }
 
     await trip.save();
     res.json({ message: "Viaje actualizado", trip });
   } catch (error) {
-    console.error(error);
+    console.error("Error al actualizar:", error);
     res.status(500).json({ message: "Error al actualizar viaje" });
   }
 };
