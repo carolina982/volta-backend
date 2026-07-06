@@ -67,7 +67,7 @@ export const createTrip = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Faltan campos obligatorios" });
     }
 
-    // ... dentro de createTrip
+   
 const newTrip = new Trip({
   rutaAcubrir,
   unidadId,
