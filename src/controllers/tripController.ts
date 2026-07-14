@@ -2,6 +2,11 @@ import { Request, Response } from "express";
 import mongoose from "mongoose";
 import Trip from "../models/Trip";
 
+const isOperatorRole = (rol?: string) => {
+  const value = (rol || "").toLowerCase();
+  return value === "chofer" || value === "operador";
+};
+
 export const getTrip = async (req: Request, res: Response) => {
   try {
     const user = (req as any).user;
@@ -12,9 +17,9 @@ export const getTrip = async (req: Request, res: Response) => {
 
     let trips;
 
-    if (user.rol?.toLowerCase() === "chofer") {
+    if (isOperatorRole(user.rol)) {
       trips = await Trip.find({
-        conductorId: String(user.id)
+        conductorId: user.id || user._id,
       });
     } else {
       trips = await Trip.find();
@@ -34,7 +39,7 @@ export const getTripById = async (req: Request, res: Response) => {
     const user = (req as any).user;
 
     if (
-      user?.rol?.toLowerCase() === "chofer" && 
+      isOperatorRole(user?.rol) && 
       String(trip.conductorId) !== String(user.id)
     ) {
       return res.status(403).json({ message: "No tienes permiso" });
@@ -60,12 +65,41 @@ export const createTrip = async (req: Request, res: Response) => {
       kilometrajeSalida, 
       kilometrajeLlegada, 
       acompanante, 
-      def 
+      def,
+      multidestino,
+      destinoExtra,
     } = req.body;
 
     if (!rutaAcubrir || !unidadId || !conductorId || !fechaSalida || !destino || !estado) {
       return res.status(400).json({ message: "Faltan campos obligatorios" });
     }
+
+    const mapKm = (list: any) =>
+      Array.isArray(list)
+        ? list.map((item: any) => ({
+            numero: Number(item.numero),
+            descripcion: item.descripcion || "",
+          }))
+        : [];
+
+    const normalizeDestinosExtras = (extra: any) => {
+      const list = Array.isArray(extra) ? extra : extra ? [extra] : [];
+      return list.map((item: any) => ({
+        destino: String(item.destino || ""),
+        fechaSalida: item.fechaSalida ? new Date(item.fechaSalida) : null,
+        fechaLlegada: item.fechaLlegada ? new Date(item.fechaLlegada) : null,
+        conductorId: item.conductorId
+          ? new mongoose.Types.ObjectId(item.conductorId)
+          : null,
+        unidadId: String(item.unidadId || ""),
+        acompanante:
+          !item.acompanante || item.acompanante === "none"
+            ? null
+            : new mongoose.Types.ObjectId(item.acompanante),
+        kilometrajeSalida: mapKm(item.kilometrajeSalida),
+        kilometrajeLlegada: mapKm(item.kilometrajeLlegada),
+      }));
+    };
 
    
 const newTrip = new Trip({
@@ -76,15 +110,13 @@ const newTrip = new Trip({
   fechaLlegada: fechaLlegada ? new Date(fechaLlegada) : null,
   destino,
   estado,
-  // Limpiamos los arrays para asegurarnos que solo tengan lo que el esquema espera
-  kilometrajeSalida: Array.isArray(kilometrajeSalida) 
-    ? kilometrajeSalida.map(item => ({ numero: Number(item.numero), descripcion: item.descripcion || "" })) 
-    : [],
-  kilometrajeLlegada: Array.isArray(kilometrajeLlegada) 
-    ? kilometrajeLlegada.map(item => ({ numero: Number(item.numero), descripcion: item.descripcion || "" })) 
-    : [],
+  kilometrajeSalida: mapKm(kilometrajeSalida),
+  kilometrajeLlegada: mapKm(kilometrajeLlegada),
   acompanante: (acompanante === "none" || acompanante === "") ? null : acompanante,
   def: def || "",
+  multidestino: Boolean(multidestino),
+  destinoExtra: Boolean(multidestino) ? normalizeDestinosExtras(destinoExtra) : [],
+  destinoActualIndex: 0,
 });
 
     await newTrip.save();
@@ -102,8 +134,8 @@ export const updateTrip = async (req: Request, res: Response) => {
 
     const user = (req as any).user;
     if (
-      user?.rol?.toLowerCase() === "chofer" &&  
-      String(trip.conductorId) !== String(user.id)
+      isOperatorRole(user?.rol) &&  
+      String(trip.conductorId) !== String(user.id || user._id)
     ) {
       return res.status(403).json({ message: "No tienes permiso" });
     }
@@ -119,7 +151,10 @@ export const updateTrip = async (req: Request, res: Response) => {
       unidadId, 
       conductorId, 
       acompanante, 
-      def
+      def,
+      multidestino,
+      destinoExtra,
+      destinoActualIndex,
     } = req.body;
 
     
@@ -128,10 +163,15 @@ export const updateTrip = async (req: Request, res: Response) => {
     if (unidadId !== undefined) trip.unidadId = unidadId;
     if (estado !== undefined) trip.estado = estado;
     if (def !== undefined) trip.def = def;
+    if (destinoActualIndex !== undefined) {
+      trip.destinoActualIndex = Number(destinoActualIndex) || 0;
+    }
     
     if (conductorId) trip.conductorId = new mongoose.Types.ObjectId(conductorId);
     if (fechaSalida) trip.fechaSalida = new Date(fechaSalida);
-    if (fechaLlegada) trip.fechaLlegada = new Date(fechaLlegada);
+    if (fechaLlegada !== undefined) {
+      trip.fechaLlegada = fechaLlegada ? new Date(fechaLlegada) : null;
+    }
     if (acompanante !== undefined) trip.acompanante = acompanante || null;
     
     
@@ -143,6 +183,41 @@ export const updateTrip = async (req: Request, res: Response) => {
     if (Array.isArray(kilometrajeLlegada)) {
       trip.kilometrajeLlegada = kilometrajeLlegada;
       trip.markModified('kilometrajeLlegada'); 
+    }
+
+    if (multidestino !== undefined) {
+      trip.multidestino = Boolean(multidestino);
+      if (!trip.multidestino) {
+        trip.destinoExtra = [];
+      } else if (destinoExtra !== undefined) {
+        const list = Array.isArray(destinoExtra) ? destinoExtra : destinoExtra ? [destinoExtra] : [];
+        trip.destinoExtra = list.map((item: any) => ({
+          destino: String(item.destino || ""),
+          fechaSalida: item.fechaSalida ? new Date(item.fechaSalida) : null,
+          fechaLlegada: item.fechaLlegada ? new Date(item.fechaLlegada) : null,
+          conductorId: item.conductorId
+            ? new mongoose.Types.ObjectId(item.conductorId)
+            : null,
+          unidadId: String(item.unidadId || ""),
+          acompanante:
+            !item.acompanante || item.acompanante === "none"
+              ? null
+              : new mongoose.Types.ObjectId(item.acompanante),
+          kilometrajeSalida: Array.isArray(item.kilometrajeSalida)
+            ? item.kilometrajeSalida.map((km: any) => ({
+                numero: Number(km.numero),
+                descripcion: km.descripcion || "",
+              }))
+            : [],
+          kilometrajeLlegada: Array.isArray(item.kilometrajeLlegada)
+            ? item.kilometrajeLlegada.map((km: any) => ({
+                numero: Number(km.numero),
+                descripcion: km.descripcion || "",
+              }))
+            : [],
+        })) as any;
+        trip.markModified("destinoExtra");
+      }
     }
 
     await trip.save();
@@ -160,8 +235,8 @@ export const deleteTrip = async (req: Request, res: Response) => {
 
     const user = (req as any).user;
     if (
-      user?.rol?.toLowerCase() === "chofer" &&
-      String(trip.conductorId) !== String(user.id)
+      isOperatorRole(user?.rol) &&
+      String(trip.conductorId) !== String(user.id || user._id)
     ) {
       return res.status(403).json({ message: "No tienes permiso" });
     }
