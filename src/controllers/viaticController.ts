@@ -77,7 +77,7 @@ export const getViaticByTrip = async (req: Request, res: Response) => {
 
 export const createViatic =async (req:Request, res :Response)=>{
   try {
-    const {tripId,conceptos,dieselHistorial,dieselCosto,dieselCargas,tag,total}=req.body;
+    const {tripId,conceptos,dieselHistorial,dieselCosto,dieselCargas,tag,total,costosExtras}=req.body;
     let conceptosFinal :any ={};
     if (conceptos){
       const conceptosObj= typeof conceptos === "string" ?JSON.parse(conceptos):conceptos;
@@ -96,6 +96,12 @@ export const createViatic =async (req:Request, res :Response)=>{
     if (!viaje){
       return res.status(400).json({message:"Viaje no econtrado"});
     }
+    const costosExtrasFinal =
+      typeof costosExtras === "string"
+        ? JSON.parse(costosExtras || "[]")
+        : Array.isArray(costosExtras)
+          ? costosExtras
+          : [];
     const newViatic=await Viatico.create({
       tripId,
       tripNombre: 
@@ -110,6 +116,10 @@ export const createViatic =async (req:Request, res :Response)=>{
       dieselCargas:Number(dieselCargas) || 0,
       tag:Number (tag) || 0,
       total:Number (total)  || 0,
+      costosExtras: costosExtrasFinal.map((item: any) => ({
+        description: String(item.description || ""),
+        costo: Number(item.costo || 0),
+      })),
       factura,
     });
     return res.status (201).json(newViatic);
@@ -122,6 +132,11 @@ export const createViatic =async (req:Request, res :Response)=>{
 
 export const updateViatic = async (req:Request, res:Response)=>{
   try {
+    const costosExtrasParsed = req.body.costosExtras
+      ? typeof req.body.costosExtras === "string"
+        ? JSON.parse(req.body.costosExtras)
+        : req.body.costosExtras
+      : undefined;
     const update:any ={
       conceptos:req.body.conceptos
       ? JSON.parse(req.body.conceptos)
@@ -130,9 +145,19 @@ export const updateViatic = async (req:Request, res:Response)=>{
       ?JSON.parse(req.body.dieselHistorial)
       :undefined,
       dieselCargas:Number(req.body.dieselCargas || 0),
-      dieselCosto:Number(req.body.dieselCosto || 0),
+      diselCosto:Number(req.body.dieselCosto || 0),
       tag:Number(req.body.tag || 0),
       total:Number(req.body.total || 0),
+      ...(costosExtrasParsed !== undefined
+        ? {
+            costosExtras: (Array.isArray(costosExtrasParsed) ? costosExtrasParsed : []).map(
+              (item: any) => ({
+                description: String(item.description || ""),
+                costo: Number(item.costo || 0),
+              })
+            ),
+          }
+        : {}),
     };
     if (req.file) update.factura=`/uploads/${req.file.filename}`;
 
