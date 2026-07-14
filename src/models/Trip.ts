@@ -44,7 +44,7 @@ export interface ITrip extends Document {
   rutaAcubrir: string;         
   destino: string;         
   fechaSalida: Date;       
-  fechaLlegada: Date;      
+  fechaLlegada: Date | null;      
   conductorId: string| mongoose.Types.ObjectId;   
   unidadId:string;      
   estado: string;   
@@ -83,7 +83,16 @@ const tripSchema = new Schema<ITrip>(
     acompanante:{type:mongoose.Schema.Types.ObjectId,ref:"User",required:false,default:null},
     def:{type:String , required:true},
     multidestino: { type: Boolean, default: false },
-    destinoExtra: { type: [DestinoExtraSchema], default: [] },
+    destinoExtra: {
+      type: [DestinoExtraSchema],
+      default: [],
+      set: (value: any) => {
+        if (!value) return [];
+        if (Array.isArray(value)) return value;
+        if (typeof value === "object") return [value];
+        return [];
+      },
+    },
     destinoActualIndex: { type: Number, default: 0 },
     
 },
