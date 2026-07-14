@@ -1,4 +1,3 @@
-import bcrypt from "bcryptjs";
 import * as crypto from "crypto";
 import { Request, Response } from "express";
 import jwt from "jsonwebtoken";
@@ -36,7 +35,9 @@ export const getUserById = async (req: Request, res: Response) => {
 const VALID_ROLES = ["Admin", "Operador", "Ayudante General"] as const;
 
 const normalizeRole = (rol: string) => {
-  const trimmed = rol.trim();
+  const trimmed = String(rol || "").trim();
+  // Compatibilidad con formularios antiguos
+  if (trimmed.toLowerCase() === "chofer") return "Operador";
   const match = VALID_ROLES.find(
     (validRole) => validRole.toLowerCase() === trimmed.toLowerCase()
   );
@@ -58,9 +59,9 @@ export const createUser = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Rol no válido" });
     }
 
-    if (role === "Admin" && (!email || !password)) {
+    if (!email || !password) {
       return res.status(400).json({
-        message: "Admin requiere correo y contraseña",
+        message: "Correo y contraseña son obligatorios",
       });
     }
 
@@ -85,9 +86,21 @@ export const createUser = async (req: Request, res: Response) => {
       contacto,
     });
 
-    return res.status(201).json(user);
-  } catch (error) {
+    const userObj = user.toObject();
+    delete (userObj as { password?: string }).password;
+    return res.status(201).json(userObj);
+  } catch (error: any) {
     console.error("Error creando usuario ", error);
+    if (error?.code === 11000) {
+      return res.status(400).json({ message: "Usuario ya existe" });
+    }
+    if (error?.name === "ValidationError") {
+      return res.status(400).json({
+        message: Object.values(error.errors || {})
+          .map((e: any) => e.message)
+          .join(". ") || "Datos inválidos",
+      });
+    }
     return res.status(500).json({
       message: "Error creando usuario",
     });
@@ -103,6 +116,13 @@ export const registerUser = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Faltan datos obligatorios" });
     }
 
+    const role = normalizeRole(rol);
+    if (!role) {
+      return res.status(400).json({
+        message: "Rol no válido. Usa Admin, Operador o Ayudante General",
+      });
+    }
+
     const existingUser = await User.findOne({
       email: email.toLowerCase(),
     });
@@ -111,14 +131,12 @@ export const registerUser = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Usuario ya existe" });
     }
 
-    
-
     const newUser = await User.create({
       nombre,
       apellido,
       email: email.toLowerCase(),
       password,
-      rol,
+      rol: role,
       contacto,
       photoUrl: req.file ? `/uploads/${req.file.filename}` : null,
     });
@@ -139,8 +157,18 @@ export const registerUser = async (req: Request, res: Response) => {
       photoUrl: newUser.photoUrl || null,
       token,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error registrando usuario", error);
+    if (error?.code === 11000) {
+      return res.status(400).json({ message: "Usuario ya existe" });
+    }
+    if (error?.name === "ValidationError") {
+      return res.status(400).json({
+        message: Object.values(error.errors || {})
+          .map((e: any) => e.message)
+          .join(". ") || "Datos inválidos",
+      });
+    }
     return res.status(500).json({ message: "Error interno del servidor" });
   }
 };
@@ -296,8 +324,8 @@ export const resetPassword = async (req: Request, res: Response) => {
     if (!user) {
       return res.status(400).json({ message: "Token inválido o expirado" });
     }
-    const hashedPassword = await bcrypt.hash(password, 10);
-    user.password = hashedPassword;
+    // El pre('save') del modelo se encarga del hash
+    user.password = password;
     user.resetToken = undefined;
     user.resetTokenExp = undefined;
     await user.save();
