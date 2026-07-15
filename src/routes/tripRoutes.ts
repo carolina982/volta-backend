@@ -1,15 +1,25 @@
 import { Router } from "express";
-import { createTrip, deleteTrip, getTrip, getTripById, getTripCount, updateTrip } from "../controllers/tripController";
+import {
+  createTrip,
+  deleteTrip,
+  getTrip,
+  getTripById,
+  getTripCount,
+  updateTrip,
+  updateTripOperador,
+} from "../controllers/tripController";
 import { verifyToken } from "../middlewares/auth";
 import { validate } from "../middlewares/validate";
 import { createTripValidator, updateTripValidator } from "../validators/tripValidator";
 
-const router =Router ();
-router.get("/count",getTripCount);
-router.post("/",verifyToken,createTripValidator,validate,createTrip);
-router.get("/",verifyToken,getTrip);
-router.get("/:id",verifyToken,getTripById);
-router.put("/:id" ,verifyToken,updateTripValidator,validate, updateTrip);
-router.delete("/:id",verifyToken , deleteTrip);
+const router = Router();
+router.get("/count", getTripCount);
+router.post("/", verifyToken, createTripValidator, validate, createTrip);
+router.get("/", verifyToken, getTrip);
+router.get("/:id", verifyToken, getTripById);
+/** Acciones de operador (iniciar / parada / finalizar) — sin validator estricto */
+router.patch("/:id/operador", verifyToken, updateTripOperador);
+router.put("/:id", verifyToken, updateTripValidator, validate, updateTrip);
+router.delete("/:id", verifyToken, deleteTrip);
 
-export default router ;
+export default router;

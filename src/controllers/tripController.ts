@@ -18,6 +18,16 @@ const isFieldStaffRole = (rol?: string) => {
   );
 };
 
+const isOperadorRole = (rol?: string) => {
+  const value = (rol || "").toLowerCase();
+  return value === "operador" || value === "chofer";
+};
+
+const isAyudanteRole = (rol?: string) => {
+  const value = (rol || "").toLowerCase();
+  return value === "ayudante general" || value === "ayudante";
+};
+
 const isOperatorRole = isFieldStaffRole;
 
 const userObjectId = (user: any) => {
@@ -25,24 +35,50 @@ const userObjectId = (user: any) => {
   return raw ? new mongoose.Types.ObjectId(String(raw)) : null;
 };
 
-const tripAssignedToUserQuery = (userId: mongoose.Types.ObjectId) => ({
-  $or: [
-    { conductorId: userId },
-    { acompanante: userId },
-    { "destinoExtra.conductorId": userId },
-    { "destinoExtra.acompanante": userId },
-  ],
-});
+/** Operador: solo como conductor. Ayudante: como acompañante (o conductor). */
+const tripAssignedToUserQuery = (userId: mongoose.Types.ObjectId, rol?: string) => {
+  if (isOperadorRole(rol)) {
+    return {
+      $or: [{ conductorId: userId }, { "destinoExtra.conductorId": userId }],
+    };
+  }
+  if (isAyudanteRole(rol)) {
+    return {
+      $or: [
+        { acompanante: userId },
+        { "destinoExtra.acompanante": userId },
+        { conductorId: userId },
+        { "destinoExtra.conductorId": userId },
+      ],
+    };
+  }
+  return {
+    $or: [
+      { conductorId: userId },
+      { acompanante: userId },
+      { "destinoExtra.conductorId": userId },
+      { "destinoExtra.acompanante": userId },
+    ],
+  };
+};
 
-const isTripAssignedToUser = (trip: any, userId: string) => {
-  if (String(trip.conductorId) === userId) return true;
-  if (trip.acompanante && String(trip.acompanante) === userId) return true;
-  const extras = Array.isArray(trip.destinoExtra) ? trip.destinoExtra : [];
-  return extras.some(
-    (extra: any) =>
-      (extra?.conductorId && String(extra.conductorId) === userId) ||
-      (extra?.acompanante && String(extra.acompanante) === userId)
-  );
+const isTripAssignedToUser = (trip: any, userId: string, rol?: string) => {
+  const asConductor =
+    String(trip.conductorId) === userId ||
+    (Array.isArray(trip.destinoExtra) &&
+      trip.destinoExtra.some(
+        (extra: any) => extra?.conductorId && String(extra.conductorId) === userId
+      ));
+  const asCompanion =
+    (trip.acompanante && String(trip.acompanante) === userId) ||
+    (Array.isArray(trip.destinoExtra) &&
+      trip.destinoExtra.some(
+        (extra: any) => extra?.acompanante && String(extra.acompanante) === userId
+      ));
+
+  if (isOperadorRole(rol)) return asConductor;
+  if (isAyudanteRole(rol)) return asCompanion || asConductor;
+  return asConductor || asCompanion;
 };
 
 export const getTrip = async (req: Request, res: Response) => {
@@ -57,7 +93,7 @@ export const getTrip = async (req: Request, res: Response) => {
     const uid = userObjectId(user);
 
     if (isFieldStaffRole(user.rol) && uid) {
-      trips = await Trip.find(tripAssignedToUserQuery(uid)).populate(
+      trips = await Trip.find(tripAssignedToUserQuery(uid, user.rol)).populate(
         "asignadoPor",
         "nombre apellido"
       );
@@ -79,7 +115,7 @@ export const getTripById = async (req: Request, res: Response) => {
     const user = (req as any).user;
     const userId = String(user?.id || user?._id || "");
 
-    if (isFieldStaffRole(user?.rol) && !isTripAssignedToUser(trip, userId)) {
+    if (isFieldStaffRole(user?.rol) && !isTripAssignedToUser(trip, userId, user?.rol)) {
       return res.status(403).json({ message: "No tienes permiso" });
     }
 
@@ -197,12 +233,17 @@ export const updateTrip = async (req: Request, res: Response) => {
     if (!trip) return res.status(404).json({ message: "Viaje no encontrado" });
 
     const user = (req as any).user;
-    const userId = String(user?.id || user?._id || "");
-    const isConductor = String(trip.conductorId) === userId;
+    const userId = String(user?._id || user?.id || "");
+    const isAdminUser = String(user?.rol || "").toLowerCase() === "admin";
+    const isMainConductor = String(trip.conductorId) === userId;
+    const isExtraConductor = Array.isArray(trip.destinoExtra)
+      ? trip.destinoExtra.some((extra: any) => extra?.conductorId && String(extra.conductorId) === userId)
+      : false;
+    const canOperateTrip = isAdminUser || isMainConductor || isExtraConductor;
 
-    // Solo el conductor (o admin) puede editar / avanzar el viaje
-    if (isFieldStaffRole(user?.rol) && !isConductor) {
-      return res.status(403).json({ message: "No tienes permiso" });
+    // Solo el conductor asignado (o admin) puede editar / avanzar el viaje
+    if (isFieldStaffRole(user?.rol) && !canOperateTrip) {
+      return res.status(403).json({ message: "No tienes permiso para iniciar o actualizar este viaje" });
     }
 
     const estadoAnterior = trip.estado;
@@ -329,6 +370,129 @@ export const updateTrip = async (req: Request, res: Response) => {
   } catch (error) {
     console.error("Error al actualizar:", error);
     res.status(500).json({ message: "Error al actualizar viaje" });
+  }
+};
+
+/** Acciones del operador: iniciar / parada / finalizar (sin validaciones pesadas del form admin). */
+export const updateTripOperador = async (req: Request, res: Response) => {
+  try {
+    const trip = await Trip.findById(req.params.id);
+    if (!trip) return res.status(404).json({ message: "Viaje no encontrado" });
+
+    const user = (req as any).user;
+    const userId = String(user?._id || user?.id || "");
+    const isAdminUser = String(user?.rol || "").toLowerCase() === "admin";
+    const isMainConductor = String(trip.conductorId) === userId;
+    const isExtraConductor = Array.isArray(trip.destinoExtra)
+      ? trip.destinoExtra.some((extra: any) => extra?.conductorId && String(extra.conductorId) === userId)
+      : false;
+
+    if (!isAdminUser && isFieldStaffRole(user?.rol) && !isMainConductor && !isExtraConductor) {
+      return res.status(403).json({
+        message: "No tienes permiso para iniciar o actualizar este viaje",
+      });
+    }
+
+    if (!isAdminUser && !isFieldStaffRole(user?.rol)) {
+      return res.status(403).json({ message: "No tienes permiso" });
+    }
+
+    const estadoAnterior = trip.estado;
+    const { estado, destinoActualIndex, fechaSalida, fechaLlegada, multidestino, destinoExtra } =
+      req.body || {};
+
+    if (estado !== undefined) {
+      const allowed = ["pendiente", "en progreso", "en parada", "completado"];
+      if (!allowed.includes(String(estado))) {
+        return res.status(400).json({ message: "Estado no válido" });
+      }
+      trip.estado = String(estado);
+    }
+
+    if (destinoActualIndex !== undefined && destinoActualIndex !== null && destinoActualIndex !== "") {
+      const idx = Number(destinoActualIndex);
+      if (!Number.isInteger(idx) || idx < 0) {
+        return res.status(400).json({ message: "Índice de destino inválido" });
+      }
+      trip.destinoActualIndex = idx;
+    }
+
+    if (fechaSalida) {
+      const d = new Date(fechaSalida);
+      if (Number.isNaN(d.getTime())) {
+        return res.status(400).json({ message: "Fecha de salida inválida" });
+      }
+      trip.fechaSalida = d;
+    }
+
+    if (fechaLlegada !== undefined) {
+      if (!fechaLlegada) {
+        trip.fechaLlegada = null;
+      } else {
+        const d = new Date(fechaLlegada);
+        if (Number.isNaN(d.getTime())) {
+          return res.status(400).json({ message: "Fecha de llegada inválida" });
+        }
+        trip.fechaLlegada = d;
+      }
+    }
+
+    if (multidestino !== undefined) {
+      trip.multidestino = Boolean(multidestino);
+    }
+
+    if (destinoExtra !== undefined) {
+      const list = Array.isArray(destinoExtra) ? destinoExtra : destinoExtra ? [destinoExtra] : [];
+      trip.destinoExtra = list.map((item: any) => ({
+        destino: String(item.destino || ""),
+        fechaSalida: item.fechaSalida ? new Date(item.fechaSalida) : null,
+        fechaLlegada: item.fechaLlegada ? new Date(item.fechaLlegada) : null,
+        conductorId: item.conductorId
+          ? new mongoose.Types.ObjectId(item.conductorId)
+          : null,
+        unidadId: String(item.unidadId || ""),
+        acompanante:
+          !item.acompanante || item.acompanante === "none"
+            ? null
+            : new mongoose.Types.ObjectId(item.acompanante),
+        kilometrajeSalida: Array.isArray(item.kilometrajeSalida)
+          ? item.kilometrajeSalida.map((km: any) => ({
+              numero: Number(km.numero),
+              descripcion: km.descripcion || "",
+            }))
+          : [],
+        kilometrajeLlegada: Array.isArray(item.kilometrajeLlegada)
+          ? item.kilometrajeLlegada.map((km: any) => ({
+              numero: Number(km.numero),
+              descripcion: km.descripcion || "",
+            }))
+          : [],
+      })) as any;
+      trip.markModified("destinoExtra");
+    }
+
+    await trip.save();
+
+    const estadoNuevo = trip.estado;
+    const seCompleto =
+      String(estadoAnterior).toLowerCase() !== "completado" &&
+      String(estadoNuevo).toLowerCase() === "completado";
+
+    if (seCompleto) {
+      try {
+        const operatorName = isOperatorRole(user?.rol)
+          ? [user.nombre, user.apellido].filter(Boolean).join(" ").trim() || "Operador"
+          : "Un operador";
+        await notifyAdminsTripCompleted(trip, operatorName);
+      } catch (notifyError) {
+        console.error("Error enviando notificación de viaje finalizado:", notifyError);
+      }
+    }
+
+    return res.json({ message: "Viaje actualizado", trip });
+  } catch (error) {
+    console.error("Error actualizando viaje (operador):", error);
+    return res.status(500).json({ message: "Error al actualizar viaje" });
   }
 };
 

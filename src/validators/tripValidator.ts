@@ -22,7 +22,14 @@ export const createTripValidator = [
 
     body("acompanante").optional({nullable: true}).isMongoId().withMessage("ID de acompañante inválido"),
     body("def").optional().isString().withMessage("DEF inválido"),
-    body("destinoActualIndex").optional().isNumeric().withMessage("Índice de destino inválido"),
+    body("destinoActualIndex")
+      .optional({ nullable: true })
+      .custom((value) => {
+        if (value === undefined || value === null || value === "") return true;
+        const n = Number(value);
+        return Number.isInteger(n) && n >= 0;
+      })
+      .withMessage("Índice de destino inválido"),
 ];
 
 export const updateTripValidator = [
@@ -45,6 +52,19 @@ export const updateTripValidator = [
       throw new Error("ID de acompañante inválido");
     }),
     body("def").optional().isString().withMessage("DEF inválido"),
-    body("destinoActualIndex").optional().isNumeric().withMessage("Índice de destino inválido"),
-    body("multidestino").optional().isBoolean().withMessage("Multidestino inválido"),
+    body("destinoActualIndex")
+      .optional({ nullable: true })
+      .custom((value) => {
+        if (value === undefined || value === null || value === "") return true;
+        const n = Number(value);
+        return Number.isInteger(n) && n >= 0;
+      })
+      .withMessage("Índice de destino inválido"),
+    body("multidestino")
+      .optional({ nullable: true })
+      .custom((value) => {
+        if (value === undefined || value === null) return true;
+        return typeof value === "boolean" || value === "true" || value === "false" || value === 0 || value === 1;
+      })
+      .withMessage("Multidestino inválido"),
 ];
