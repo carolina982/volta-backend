@@ -16,6 +16,9 @@ export interface IUser extends Document {
   comparePassword(password: string): Promise<boolean>;
 }
 
+const isBcryptHash = (value: string) =>
+  typeof value === "string" && /^\$2[aby]\$/.test(value);
+
 const userSchema = new Schema<IUser>(
   {
     nombre: { type: String, required: true },
@@ -37,42 +40,38 @@ const userSchema = new Schema<IUser>(
   { timestamps: true }
 );
 
-userSchema.pre("save", async function (next) {
-  try {
-    if (!this.isModified("password") || !this.password) return next();
-    const salt = await bcrypt.genSalt(10);
-    this.password = await bcrypt.hash(this.password, salt);
-    next();
-  } catch (error) {
-    next(error as Error);
-  }
+userSchema.pre("save", async function () {
+  if (!this.isModified("password") || !this.password) return;
+  // Evita doble-hash si ya viene hasheada
+  if (isBcryptHash(this.password)) return;
+  const salt = await bcrypt.genSalt(10);
+  this.password = await bcrypt.hash(this.password, salt);
 });
 
-userSchema.pre("findOneAndUpdate", async function (next) {
-  try {
-    const update = this.getUpdate() as Record<string, unknown> | null;
-    if (!update) return next();
+userSchema.pre("findOneAndUpdate", async function () {
+  const update = this.getUpdate() as Record<string, unknown> | null;
+  if (!update) return;
 
-    const plainUpdate = update as { password?: string; $set?: { password?: string } };
-    const password = plainUpdate.password ?? plainUpdate.$set?.password;
+  const plainUpdate = update as { password?: string; $set?: { password?: string } };
+  const password = plainUpdate.$set?.password ?? plainUpdate.password;
+  if (!password || isBcryptHash(password)) return;
 
-    if (password) {
-      const hash = await bcrypt.hash(password, 10);
-      if (plainUpdate.$set) {
-        plainUpdate.$set.password = hash;
-      } else {
-        plainUpdate.password = hash;
-      }
-    }
-
-    next();
-  } catch (error) {
-    next(error as Error);
+  const hash = await bcrypt.hash(password, 10);
+  if (!plainUpdate.$set) {
+    plainUpdate.$set = {};
+  }
+  plainUpdate.$set.password = hash;
+  if (plainUpdate.password !== undefined) {
+    delete plainUpdate.password;
   }
 });
 
 userSchema.methods.comparePassword = function (password: string) {
   if (!this.password) return Promise.resolve(false);
+  // Contraseña guardada en texto plano (datos viejos / update roto)
+  if (!isBcryptHash(this.password)) {
+    return Promise.resolve(this.password === password);
+  }
   return bcrypt.compare(password, this.password);
 };
 

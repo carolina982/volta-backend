@@ -234,15 +234,19 @@ export const loginUser = async (req: Request, res: Response) => {
 export const updateUser = async (req: Request, res: Response) => {
   try {
     const { nombre, apellido, email, password, rol, contacto } = req.body;
-    const updateData: Record<string, unknown> = {};
 
-    if (nombre !== undefined) updateData.nombre = nombre;
-    if (apellido !== undefined) updateData.apellido = apellido;
-    if (email !== undefined) {
-      updateData.email = String(email).trim().toLowerCase();
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ message: "Usuario no encontrado" });
     }
-    if (contacto !== undefined) updateData.contacto = contacto;
-    if (password) updateData.password = password;
+
+    if (nombre !== undefined) user.nombre = String(nombre).trim();
+    if (apellido !== undefined) user.apellido = String(apellido).trim();
+    if (email !== undefined) {
+      const nextEmail = String(email).trim().toLowerCase();
+      user.email = nextEmail || (undefined as unknown as string);
+    }
+    if (contacto !== undefined) user.contacto = String(contacto).trim();
 
     if (rol !== undefined) {
       const role = normalizeRole(String(rol));
@@ -251,21 +255,30 @@ export const updateUser = async (req: Request, res: Response) => {
           message: "Rol no válido. Usa Admin, Operador o Ayudante General",
         });
       }
-      updateData.rol = role;
+      user.rol = role;
+    }
+
+    if (password !== undefined && password !== null && String(password).trim() !== "") {
+      const plain = String(password).trim();
+      if (plain.length < 6) {
+        return res.status(400).json({
+          message: "La contraseña debe tener al menos 6 caracteres",
+        });
+      }
+      if (!user.email) {
+        return res.status(400).json({
+          message: "El usuario necesita un correo para poder iniciar sesión con contraseña",
+        });
+      }
+      user.password = plain;
+      user.markModified("password");
     }
 
     if (req.file) {
-      updateData.photoUrl = `/uploads/${req.file.filename}`;
+      user.photoUrl = `/uploads/${req.file.filename}`;
     }
 
-    const user = await User.findByIdAndUpdate(req.params.id, updateData, {
-      new: true,
-      runValidators: true,
-    });
-
-    if (!user) {
-      return res.status(404).json({ message: "Usuario no encontrado" });
-    }
+    await user.save();
 
     const userObj = user.toObject();
     delete (userObj as { password?: string }).password;
