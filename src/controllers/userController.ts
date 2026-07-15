@@ -287,6 +287,32 @@ export const updateUser = async (req: Request, res: Response) => {
   }
 };
 
+/** Solo actualiza la foto de perfil (Operador / Ayudante desde Mi Perfil). */
+export const updateUserPhoto = async (req: Request, res: Response) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: "Debes seleccionar una imagen" });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { photoUrl: `/uploads/${req.file.filename}` },
+      { new: true, runValidators: true }
+    );
+
+    if (!user) {
+      return res.status(404).json({ message: "Usuario no encontrado" });
+    }
+
+    const userObj = user.toObject();
+    delete (userObj as { password?: string }).password;
+    return res.json(userObj);
+  } catch (error) {
+    console.error("Error al actualizar foto", error);
+    return res.status(500).json({ message: "Error al actualizar la foto" });
+  }
+};
+
 export const deleteUser = async (req: Request, res: Response) => {
   const { id } = req.params;
   console.log("Id recibiendo en backend", id);

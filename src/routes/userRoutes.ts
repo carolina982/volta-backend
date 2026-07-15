@@ -1,5 +1,5 @@
 import express from "express";
-import { createUser, deleteUser, forgotPassword, getUser, getUserById, loginUser, registerUser, resetPassword, updateUser, } from "../controllers/userController";
+import { createUser, deleteUser, forgotPassword, getUser, getUserById, loginUser, registerUser, resetPassword, updateUser, updateUserPhoto, } from "../controllers/userController";
 import { upload } from "../middlewares/upload";
 import { validate } from "../middlewares/validate";
 import { loginUserValidator, registerUserValidator } from "../validators/userValidator";
@@ -11,8 +11,8 @@ router.post("/register",upload.single("photo"),registerUserValidator,validate,re
 router.get("/", getUser);
 router.get("/:id", getUserById);
 router.post("/", createUser);
+router.patch("/:id/photo", upload.single("photo"), updateUserPhoto);
 router.patch("/:id", upload.single("photo"), updateUser);
-router.patch("/:id/photo", upload.single("photo"), updateUser);
 router.delete("/:id", deleteUser);
 router.post ("/forgot-password",forgotPassword);
 router.post("/reset-password/:token",resetPassword);
