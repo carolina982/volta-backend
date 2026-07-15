@@ -9,7 +9,7 @@ import {
 
 /** Operador / Chofer / Ayudante: solo ven viajes donde participan */
 const isFieldStaffRole = (rol?: string) => {
-  const value = (rol || "").toLowerCase();
+  const value = (rol || "").toLowerCase().trim();
   return (
     value === "chofer" ||
     value === "operador" ||
@@ -19,12 +19,12 @@ const isFieldStaffRole = (rol?: string) => {
 };
 
 const isOperadorRole = (rol?: string) => {
-  const value = (rol || "").toLowerCase();
+  const value = (rol || "").toLowerCase().trim();
   return value === "operador" || value === "chofer";
 };
 
 const isAyudanteRole = (rol?: string) => {
-  const value = (rol || "").toLowerCase();
+  const value = (rol || "").toLowerCase().trim();
   return value === "ayudante general" || value === "ayudante";
 };
 
@@ -384,45 +384,55 @@ export const updateTrip = async (req: Request, res: Response) => {
 /** Acciones del operador: iniciar / parada / finalizar (sin validaciones pesadas del form admin). */
 export const updateTripOperador = async (req: Request, res: Response) => {
   try {
-    const trip = await Trip.findById(req.params.id);
-    if (!trip) return res.status(404).json({ message: "Viaje no encontrado" });
+    const tripId = String(req.params.id || "").trim();
+    if (!tripId || !mongoose.Types.ObjectId.isValid(tripId)) {
+      return res.status(400).json({ message: "ID de viaje inválido" });
+    }
 
     const user = (req as any).user;
-    const userId = String(user?._id || user?.id || "").trim();
-    const conductorIdStr = String(
-      (trip.conductorId as any)?._id || trip.conductorId || ""
-    ).trim();
-    const isAdminUser = String(user?.rol || "").toLowerCase() === "admin";
-    const isMainConductor = Boolean(userId && conductorIdStr && userId === conductorIdStr);
-    const isExtraConductor = Array.isArray(trip.destinoExtra)
-      ? trip.destinoExtra.some((extra: any) => {
-          const extraId = String(extra?.conductorId?._id || extra?.conductorId || "").trim();
-          return Boolean(userId && extraId && userId === extraId);
-        })
-      : false;
+    if (!user) {
+      return res.status(401).json({ message: "Usuario no autenticado" });
+    }
 
-    // Operador / ayudante: solo avanza su viaje. Admin siempre puede.
-    if (!isAdminUser) {
-      if (!isFieldStaffRole(user?.rol)) {
-        return res.status(403).json({ message: "No tienes permiso" });
-      }
-      if (!isMainConductor && !isExtraConductor) {
+    const isAdminUser = String(user?.rol || "").toLowerCase() === "admin";
+    const uid = userObjectId(user);
+
+    // Misma regla que el listado: si el viaje aparece en "Mis viajes", puede iniciarlo.
+    let trip;
+    if (isAdminUser) {
+      trip = await Trip.findById(tripId);
+    } else if (isFieldStaffRole(user.rol) && uid) {
+      trip = await Trip.findOne({
+        _id: tripId,
+        ...tripAssignedToUserQuery(uid, user.rol),
+      });
+      if (!trip) {
+        // Puede existir pero no estar asignado a este usuario
+        const exists = await Trip.exists({ _id: tripId });
+        if (!exists) return res.status(404).json({ message: "Viaje no encontrado" });
         return res.status(403).json({
-          message: "No tienes permiso para iniciar este viaje. Debe estar asignado a ti como operador.",
+          message:
+            "No tienes permiso para iniciar este viaje. Debe estar asignado a tu usuario como operador.",
         });
       }
+    } else {
+      return res.status(403).json({ message: "No tienes permiso" });
     }
+
+    if (!trip) return res.status(404).json({ message: "Viaje no encontrado" });
 
     const estadoAnterior = trip.estado;
     const { estado, destinoActualIndex, fechaSalida, fechaLlegada, multidestino, destinoExtra } =
       req.body || {};
+
+    const $set: Record<string, unknown> = {};
 
     if (estado !== undefined) {
       const allowed = ["pendiente", "en progreso", "en parada", "completado"];
       if (!allowed.includes(String(estado))) {
         return res.status(400).json({ message: "Estado no válido" });
       }
-      trip.estado = String(estado);
+      $set.estado = String(estado);
     }
 
     if (destinoActualIndex !== undefined && destinoActualIndex !== null && destinoActualIndex !== "") {
@@ -430,7 +440,7 @@ export const updateTripOperador = async (req: Request, res: Response) => {
       if (!Number.isInteger(idx) || idx < 0) {
         return res.status(400).json({ message: "Índice de destino inválido" });
       }
-      trip.destinoActualIndex = idx;
+      $set.destinoActualIndex = idx;
     }
 
     if (fechaSalida) {
@@ -438,39 +448,42 @@ export const updateTripOperador = async (req: Request, res: Response) => {
       if (Number.isNaN(d.getTime())) {
         return res.status(400).json({ message: "Fecha de salida inválida" });
       }
-      trip.fechaSalida = d;
+      $set.fechaSalida = d;
     }
 
     if (fechaLlegada !== undefined) {
       if (!fechaLlegada) {
-        trip.fechaLlegada = null;
+        $set.fechaLlegada = null;
       } else {
         const d = new Date(fechaLlegada);
         if (Number.isNaN(d.getTime())) {
           return res.status(400).json({ message: "Fecha de llegada inválida" });
         }
-        trip.fechaLlegada = d;
+        $set.fechaLlegada = d;
       }
     }
 
     if (multidestino !== undefined) {
-      trip.multidestino = Boolean(multidestino);
+      $set.multidestino = Boolean(multidestino);
     }
 
     if (destinoExtra !== undefined) {
       const list = Array.isArray(destinoExtra) ? destinoExtra : destinoExtra ? [destinoExtra] : [];
-      trip.destinoExtra = list.map((item: any) => ({
+      $set.destinoExtra = list.map((item: any) => ({
         destino: String(item.destino || ""),
         fechaSalida: item.fechaSalida ? new Date(item.fechaSalida) : null,
         fechaLlegada: item.fechaLlegada ? new Date(item.fechaLlegada) : null,
-        conductorId: item.conductorId
-          ? new mongoose.Types.ObjectId(item.conductorId)
-          : null,
+        conductorId:
+          item.conductorId && mongoose.Types.ObjectId.isValid(String(item.conductorId))
+            ? new mongoose.Types.ObjectId(String(item.conductorId))
+            : null,
         unidadId: String(item.unidadId || ""),
         acompanante:
-          !item.acompanante || item.acompanante === "none"
-            ? null
-            : new mongoose.Types.ObjectId(item.acompanante),
+          item.acompanante &&
+          item.acompanante !== "none" &&
+          mongoose.Types.ObjectId.isValid(String(item.acompanante))
+            ? new mongoose.Types.ObjectId(String(item.acompanante))
+            : null,
         kilometrajeSalida: Array.isArray(item.kilometrajeSalida)
           ? item.kilometrajeSalida.map((km: any) => ({
               numero: Number(km.numero),
@@ -483,13 +496,24 @@ export const updateTripOperador = async (req: Request, res: Response) => {
               descripcion: km.descripcion || "",
             }))
           : [],
-      })) as any;
-      trip.markModified("destinoExtra");
+      }));
     }
 
-    await trip.save();
+    if (Object.keys($set).length === 0) {
+      return res.status(400).json({ message: "No hay cambios para aplicar" });
+    }
 
-    const estadoNuevo = trip.estado;
+    const updated = await Trip.findByIdAndUpdate(
+      tripId,
+      { $set },
+      { new: true, runValidators: false }
+    );
+
+    if (!updated) {
+      return res.status(404).json({ message: "Viaje no encontrado" });
+    }
+
+    const estadoNuevo = updated.estado;
     const seCompleto =
       String(estadoAnterior).toLowerCase() !== "completado" &&
       String(estadoNuevo).toLowerCase() === "completado";
@@ -499,16 +523,18 @@ export const updateTripOperador = async (req: Request, res: Response) => {
         const operatorName = isOperatorRole(user?.rol)
           ? [user.nombre, user.apellido].filter(Boolean).join(" ").trim() || "Operador"
           : "Un operador";
-        await notifyAdminsTripCompleted(trip, operatorName);
+        await notifyAdminsTripCompleted(updated, operatorName);
       } catch (notifyError) {
         console.error("Error enviando notificación de viaje finalizado:", notifyError);
       }
     }
 
-    return res.json({ message: "Viaje actualizado", trip });
-  } catch (error) {
+    return res.json({ message: "Viaje actualizado", trip: updated });
+  } catch (error: any) {
     console.error("Error actualizando viaje (operador):", error);
-    return res.status(500).json({ message: "Error al actualizar viaje" });
+    return res.status(500).json({
+      message: error?.message || "Error al actualizar viaje",
+    });
   }
 };
 
