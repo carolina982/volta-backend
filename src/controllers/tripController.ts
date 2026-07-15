@@ -233,17 +233,25 @@ export const updateTrip = async (req: Request, res: Response) => {
     if (!trip) return res.status(404).json({ message: "Viaje no encontrado" });
 
     const user = (req as any).user;
-    const userId = String(user?._id || user?.id || "");
+    const userId = String(user?._id || user?.id || "").trim();
+    const conductorIdStr = String(
+      (trip.conductorId as any)?._id || trip.conductorId || ""
+    ).trim();
     const isAdminUser = String(user?.rol || "").toLowerCase() === "admin";
-    const isMainConductor = String(trip.conductorId) === userId;
+    const isMainConductor = Boolean(userId && conductorIdStr && userId === conductorIdStr);
     const isExtraConductor = Array.isArray(trip.destinoExtra)
-      ? trip.destinoExtra.some((extra: any) => extra?.conductorId && String(extra.conductorId) === userId)
+      ? trip.destinoExtra.some((extra: any) => {
+          const extraId = String(extra?.conductorId?._id || extra?.conductorId || "").trim();
+          return Boolean(userId && extraId && userId === extraId);
+        })
       : false;
     const canOperateTrip = isAdminUser || isMainConductor || isExtraConductor;
 
     // Solo el conductor asignado (o admin) puede editar / avanzar el viaje
     if (isFieldStaffRole(user?.rol) && !canOperateTrip) {
-      return res.status(403).json({ message: "No tienes permiso para iniciar o actualizar este viaje" });
+      return res.status(403).json({
+        message: "No tienes permiso para iniciar o actualizar este viaje. Verifica que el viaje esté asignado a tu usuario.",
+      });
     }
 
     const estadoAnterior = trip.estado;
@@ -380,21 +388,29 @@ export const updateTripOperador = async (req: Request, res: Response) => {
     if (!trip) return res.status(404).json({ message: "Viaje no encontrado" });
 
     const user = (req as any).user;
-    const userId = String(user?._id || user?.id || "");
+    const userId = String(user?._id || user?.id || "").trim();
+    const conductorIdStr = String(
+      (trip.conductorId as any)?._id || trip.conductorId || ""
+    ).trim();
     const isAdminUser = String(user?.rol || "").toLowerCase() === "admin";
-    const isMainConductor = String(trip.conductorId) === userId;
+    const isMainConductor = Boolean(userId && conductorIdStr && userId === conductorIdStr);
     const isExtraConductor = Array.isArray(trip.destinoExtra)
-      ? trip.destinoExtra.some((extra: any) => extra?.conductorId && String(extra.conductorId) === userId)
+      ? trip.destinoExtra.some((extra: any) => {
+          const extraId = String(extra?.conductorId?._id || extra?.conductorId || "").trim();
+          return Boolean(userId && extraId && userId === extraId);
+        })
       : false;
 
-    if (!isAdminUser && isFieldStaffRole(user?.rol) && !isMainConductor && !isExtraConductor) {
-      return res.status(403).json({
-        message: "No tienes permiso para iniciar o actualizar este viaje",
-      });
-    }
-
-    if (!isAdminUser && !isFieldStaffRole(user?.rol)) {
-      return res.status(403).json({ message: "No tienes permiso" });
+    // Operador / ayudante: solo avanza su viaje. Admin siempre puede.
+    if (!isAdminUser) {
+      if (!isFieldStaffRole(user?.rol)) {
+        return res.status(403).json({ message: "No tienes permiso" });
+      }
+      if (!isMainConductor && !isExtraConductor) {
+        return res.status(403).json({
+          message: "No tienes permiso para iniciar este viaje. Debe estar asignado a ti como operador.",
+        });
+      }
     }
 
     const estadoAnterior = trip.estado;
