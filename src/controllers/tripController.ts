@@ -1,6 +1,10 @@
 import { Request, Response } from "express";
 import mongoose from "mongoose";
 import Trip from "../models/Trip";
+import {
+  notifyAdminsTripCompleted,
+  notifyTripAssigned,
+} from "../services/notificationService";
 
 const isOperatorRole = (rol?: string) => {
   const value = (rol || "").toLowerCase();
@@ -124,6 +128,13 @@ const newTrip = new Trip({
 });
 
     await newTrip.save();
+
+    try {
+      await notifyTripAssigned(newTrip);
+    } catch (notifyError) {
+      console.error("Error enviando notificaciones de asignación:", notifyError);
+    }
+
     res.status(201).json(newTrip);
   } catch (error) {
     console.error("Error creando viaje:", error);
@@ -143,6 +154,8 @@ export const updateTrip = async (req: Request, res: Response) => {
     ) {
       return res.status(403).json({ message: "No tienes permiso" });
     }
+
+    const estadoAnterior = trip.estado;
 
     const {
       rutaAcubrir, 
@@ -225,6 +238,23 @@ export const updateTrip = async (req: Request, res: Response) => {
     }
 
     await trip.save();
+
+    const estadoNuevo = trip.estado;
+    const seCompleto =
+      String(estadoAnterior).toLowerCase() !== "completado" &&
+      String(estadoNuevo).toLowerCase() === "completado";
+
+    if (seCompleto) {
+      try {
+        const operatorName = isOperatorRole(user?.rol)
+          ? [user.nombre, user.apellido].filter(Boolean).join(" ").trim() || "Operador"
+          : "Un operador";
+        await notifyAdminsTripCompleted(trip, operatorName);
+      } catch (notifyError) {
+        console.error("Error enviando notificación de viaje finalizado:", notifyError);
+      }
+    }
+
     res.json({ message: "Viaje actualizado", trip });
   } catch (error) {
     console.error("Error al actualizar:", error);

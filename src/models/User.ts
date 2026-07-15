@@ -9,6 +9,7 @@ export interface IUser extends Document {
   rol: string;
   contacto: string;
   photoUrl?: string | null;
+  expoPushToken?: string | null;
   resetToken?: string;
   resetTokenExp?: Date;
 
@@ -29,6 +30,7 @@ const userSchema = new Schema<IUser>(
     },
     contacto: { type: String },
     photoUrl: { type: String, default: null },
+    expoPushToken: { type: String, default: null },
     resetToken: { type: String },
     resetTokenExp: { type: Date },
   },
