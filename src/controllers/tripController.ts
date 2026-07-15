@@ -20,9 +20,9 @@ export const getTrip = async (req: Request, res: Response) => {
     if (isOperatorRole(user.rol)) {
       trips = await Trip.find({
         conductorId: user.id || user._id,
-      });
+      }).populate("asignadoPor", "nombre apellido");
     } else {
-      trips = await Trip.find();
+      trips = await Trip.find().populate("asignadoPor", "nombre apellido");
     }
     return res.status(200).json(trips);
   } catch (error) {
@@ -33,7 +33,7 @@ export const getTrip = async (req: Request, res: Response) => {
 
 export const getTripById = async (req: Request, res: Response) => {
   try {
-    const trip = await Trip.findById(req.params.id);
+    const trip = await Trip.findById(req.params.id).populate("asignadoPor", "nombre apellido");
     if (!trip) return res.status(404).json({ message: "Viaje no encontrado" });
 
     const user = (req as any).user;
@@ -102,6 +102,9 @@ export const createTrip = async (req: Request, res: Response) => {
     };
 
    
+const user = (req as any).user;
+const asignadoPorId = user?._id || user?.id || null;
+
 const newTrip = new Trip({
   rutaAcubrir,
   unidadId,
@@ -117,6 +120,7 @@ const newTrip = new Trip({
   multidestino: Boolean(multidestino),
   destinoExtra: Boolean(multidestino) ? normalizeDestinosExtras(destinoExtra) : [],
   destinoActualIndex: 0,
+  asignadoPor: asignadoPorId ? new mongoose.Types.ObjectId(asignadoPorId) : null,
 });
 
     await newTrip.save();

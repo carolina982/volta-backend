@@ -55,6 +55,7 @@ export interface ITrip extends Document {
   multidestino: boolean;
   destinoExtra: IDestinoExtra[];
   destinoActualIndex: number;
+  asignadoPor: string | mongoose.Types.ObjectId | null;
 }
 const tripSchema = new Schema<ITrip>(
   {
@@ -94,6 +95,12 @@ const tripSchema = new Schema<ITrip>(
       },
     },
     destinoActualIndex: { type: Number, default: 0 },
+    asignadoPor: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: false,
+      default: null,
+    },
     
 },
   {timestamps:true}
