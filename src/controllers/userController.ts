@@ -238,16 +238,30 @@ export const updateUser = async (req: Request, res: Response) => {
 
     if (nombre !== undefined) updateData.nombre = nombre;
     if (apellido !== undefined) updateData.apellido = apellido;
-    if (email !== undefined) updateData.email = email;
-    if (rol !== undefined) updateData.rol = rol;
+    if (email !== undefined) {
+      updateData.email = String(email).trim().toLowerCase();
+    }
     if (contacto !== undefined) updateData.contacto = contacto;
     if (password) updateData.password = password;
+
+    if (rol !== undefined) {
+      const role = normalizeRole(String(rol));
+      if (!role) {
+        return res.status(400).json({
+          message: "Rol no válido. Usa Admin, Operador o Ayudante General",
+        });
+      }
+      updateData.rol = role;
+    }
 
     if (req.file) {
       updateData.photoUrl = `/uploads/${req.file.filename}`;
     }
 
-    const user = await User.findByIdAndUpdate(req.params.id, updateData, { new: true });
+    const user = await User.findByIdAndUpdate(req.params.id, updateData, {
+      new: true,
+      runValidators: true,
+    });
 
     if (!user) {
       return res.status(404).json({ message: "Usuario no encontrado" });
@@ -256,8 +270,19 @@ export const updateUser = async (req: Request, res: Response) => {
     const userObj = user.toObject();
     delete (userObj as { password?: string }).password;
     return res.json(userObj);
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error al actualizar usuario", error);
+    if (error?.code === 11000) {
+      return res.status(400).json({ message: "El correo ya está en uso" });
+    }
+    if (error?.name === "ValidationError") {
+      return res.status(400).json({
+        message:
+          Object.values(error.errors || {})
+            .map((e: any) => e.message)
+            .join(". ") || "Datos inválidos",
+      });
+    }
     return res.status(500).json({ message: "Error al actualizar usuario" });
   }
 };

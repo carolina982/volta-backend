@@ -2,11 +2,16 @@ import { Request, Response } from "express";
 import Trip from "../models/Trip";
 import Viatico from "../models/Viatic";
 
+const isOperatorRole = (rol?: string) => {
+  const value = (rol || "").toLowerCase();
+  return value === "operador" || value === "chofer";
+};
+
 export const getViatic= async (req:Request, res:Response)=>{
   try {
     const user=(req as any).user;
     let viatics;
-    if (user?.rol === "Chofer"){
+    if (isOperatorRole(user?.rol)){
       const trips=await Trip.find({conductorId:user.id});
       const tripsIds=trips.map(t=>t._id);
 
@@ -42,7 +47,7 @@ export const getViaticById = async (req:Request , res:Response)=>{
       return res.status(404).json({message:"Viatico no econtrado"});
     }
     const user =(req as any).user;
-    if (user?.rol === "Chofer"){
+    if (isOperatorRole(user?.rol)){
       const trip: any =viatic.tripId;
       if(trip.conductorId._id.toString() !== user.id.toString()){
         return res.status(403).json({message:"No tienes permisos"});
@@ -62,7 +67,7 @@ export const getViaticByTrip = async (req: Request, res: Response) => {
     const user = (req as any).user;
     const trip = await Trip.findById(tripId);
 
-    if (user?.rol === "Chofer" && (!trip || trip.conductorId.toString() !== user.id.toString())) {
+    if (isOperatorRole(user?.rol) && (!trip || trip.conductorId.toString() !== user.id.toString())) {
       return res.status(403).json({ message: "No tienes permisos para ver estos viáticos" });
     }
 
@@ -180,7 +185,7 @@ export const updateViatic = async (req:Request, res:Response)=>{
      if (!viatic) return res.status(404).json({ message: "Viático no encontrado" });
 
      const user = (req as any).user;
-        if (user?.rol === "Chofer") {
+        if (isOperatorRole(user?.rol)) {
         const trip = await Trip.findById(viatic.tripId);
         if (!trip || trip.conductorId.toString() !== user.id.toString()) {
         return res.status(403).json({ message: "No tienes permisos para eliminar este viático" });
