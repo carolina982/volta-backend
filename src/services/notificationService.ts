@@ -49,13 +49,27 @@ export async function notifyTripAssigned(trip: {
   });
 
   if (trip.acompanante && String(trip.acompanante) !== "none") {
-    await notifyUser(String(trip.acompanante), {
-      title: "Viaje como acompañante",
-      body: `Te asignaron como acompañante: ${routeLabel}`,
-      type: "companion_assigned",
-      tripId,
-    });
+    await notifyCompanionAssigned(trip);
   }
+}
+
+export async function notifyCompanionAssigned(trip: {
+  _id: mongoose.Types.ObjectId | string;
+  rutaAcubrir: string;
+  destino: string;
+  acompanante?: mongoose.Types.ObjectId | string | null;
+}) {
+  if (!trip.acompanante || String(trip.acompanante) === "none") return;
+
+  const tripId = String(trip._id);
+  const routeLabel = `${trip.rutaAcubrir} → ${trip.destino}`;
+
+  await notifyUser(String(trip.acompanante), {
+    title: "Vas como acompañante",
+    body: `Te asignaron como acompañante en el viaje: ${routeLabel}`,
+    type: "companion_assigned",
+    tripId,
+  });
 }
 
 export async function notifyAdminsTripCompleted(

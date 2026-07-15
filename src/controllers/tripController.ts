@@ -3,12 +3,46 @@ import mongoose from "mongoose";
 import Trip from "../models/Trip";
 import {
   notifyAdminsTripCompleted,
+  notifyCompanionAssigned,
   notifyTripAssigned,
 } from "../services/notificationService";
 
-const isOperatorRole = (rol?: string) => {
+/** Operador / Chofer / Ayudante: solo ven viajes donde participan */
+const isFieldStaffRole = (rol?: string) => {
   const value = (rol || "").toLowerCase();
-  return value === "chofer" || value === "operador";
+  return (
+    value === "chofer" ||
+    value === "operador" ||
+    value === "ayudante general" ||
+    value === "ayudante"
+  );
+};
+
+const isOperatorRole = isFieldStaffRole;
+
+const userObjectId = (user: any) => {
+  const raw = user?._id || user?.id;
+  return raw ? new mongoose.Types.ObjectId(String(raw)) : null;
+};
+
+const tripAssignedToUserQuery = (userId: mongoose.Types.ObjectId) => ({
+  $or: [
+    { conductorId: userId },
+    { acompanante: userId },
+    { "destinoExtra.conductorId": userId },
+    { "destinoExtra.acompanante": userId },
+  ],
+});
+
+const isTripAssignedToUser = (trip: any, userId: string) => {
+  if (String(trip.conductorId) === userId) return true;
+  if (trip.acompanante && String(trip.acompanante) === userId) return true;
+  const extras = Array.isArray(trip.destinoExtra) ? trip.destinoExtra : [];
+  return extras.some(
+    (extra: any) =>
+      (extra?.conductorId && String(extra.conductorId) === userId) ||
+      (extra?.acompanante && String(extra.acompanante) === userId)
+  );
 };
 
 export const getTrip = async (req: Request, res: Response) => {
@@ -20,11 +54,13 @@ export const getTrip = async (req: Request, res: Response) => {
     }
 
     let trips;
+    const uid = userObjectId(user);
 
-    if (isOperatorRole(user.rol)) {
-      trips = await Trip.find({
-        conductorId: user.id || user._id,
-      }).populate("asignadoPor", "nombre apellido");
+    if (isFieldStaffRole(user.rol) && uid) {
+      trips = await Trip.find(tripAssignedToUserQuery(uid)).populate(
+        "asignadoPor",
+        "nombre apellido"
+      );
     } else {
       trips = await Trip.find().populate("asignadoPor", "nombre apellido");
     }
@@ -41,11 +77,9 @@ export const getTripById = async (req: Request, res: Response) => {
     if (!trip) return res.status(404).json({ message: "Viaje no encontrado" });
 
     const user = (req as any).user;
+    const userId = String(user?.id || user?._id || "");
 
-    if (
-      isOperatorRole(user?.rol) && 
-      String(trip.conductorId) !== String(user.id)
-    ) {
+    if (isFieldStaffRole(user?.rol) && !isTripAssignedToUser(trip, userId)) {
       return res.status(403).json({ message: "No tienes permiso" });
     }
 
@@ -119,7 +153,10 @@ const newTrip = new Trip({
   estado,
   kilometrajeSalida: mapKm(kilometrajeSalida),
   kilometrajeLlegada: mapKm(kilometrajeLlegada),
-  acompanante: (acompanante === "none" || acompanante === "") ? null : acompanante,
+  acompanante:
+    acompanante === "none" || acompanante === "" || !acompanante
+      ? null
+      : new mongoose.Types.ObjectId(String(acompanante)),
   def: def || "",
   multidestino: Boolean(multidestino),
   destinoExtra: Boolean(multidestino) ? normalizeDestinosExtras(destinoExtra) : [],
@@ -131,6 +168,18 @@ const newTrip = new Trip({
 
     try {
       await notifyTripAssigned(newTrip);
+      // Notificar acompañantes de destinos extras
+      const extras = Array.isArray(newTrip.destinoExtra) ? newTrip.destinoExtra : [];
+      for (const extra of extras) {
+        if (extra?.acompanante) {
+          await notifyCompanionAssigned({
+            _id: newTrip._id,
+            rutaAcubrir: newTrip.rutaAcubrir,
+            destino: String(extra.destino || newTrip.destino),
+            acompanante: extra.acompanante,
+          });
+        }
+      }
     } catch (notifyError) {
       console.error("Error enviando notificaciones de asignación:", notifyError);
     }
@@ -148,14 +197,16 @@ export const updateTrip = async (req: Request, res: Response) => {
     if (!trip) return res.status(404).json({ message: "Viaje no encontrado" });
 
     const user = (req as any).user;
-    if (
-      isOperatorRole(user?.rol) &&  
-      String(trip.conductorId) !== String(user.id || user._id)
-    ) {
+    const userId = String(user?.id || user?._id || "");
+    const isConductor = String(trip.conductorId) === userId;
+
+    // Solo el conductor (o admin) puede editar / avanzar el viaje
+    if (isFieldStaffRole(user?.rol) && !isConductor) {
       return res.status(403).json({ message: "No tienes permiso" });
     }
 
     const estadoAnterior = trip.estado;
+    const acompananteAnterior = trip.acompanante ? String(trip.acompanante) : null;
 
     const {
       rutaAcubrir, 
@@ -189,7 +240,12 @@ export const updateTrip = async (req: Request, res: Response) => {
     if (fechaLlegada !== undefined) {
       trip.fechaLlegada = fechaLlegada ? new Date(fechaLlegada) : null;
     }
-    if (acompanante !== undefined) trip.acompanante = acompanante || null;
+    if (acompanante !== undefined) {
+      trip.acompanante =
+        !acompanante || acompanante === "none"
+          ? null
+          : new mongoose.Types.ObjectId(String(acompanante));
+    }
     
     
     if (Array.isArray(kilometrajeSalida)) {
@@ -239,6 +295,20 @@ export const updateTrip = async (req: Request, res: Response) => {
 
     await trip.save();
 
+    const acompananteNuevo = trip.acompanante ? String(trip.acompanante) : null;
+    if (acompananteNuevo && acompananteNuevo !== acompananteAnterior) {
+      try {
+        await notifyCompanionAssigned({
+          _id: trip._id,
+          rutaAcubrir: trip.rutaAcubrir,
+          destino: trip.destino,
+          acompanante: acompananteNuevo,
+        });
+      } catch (notifyError) {
+        console.error("Error notificando acompañante:", notifyError);
+      }
+    }
+
     const estadoNuevo = trip.estado;
     const seCompleto =
       String(estadoAnterior).toLowerCase() !== "completado" &&
@@ -269,7 +339,7 @@ export const deleteTrip = async (req: Request, res: Response) => {
 
     const user = (req as any).user;
     if (
-      isOperatorRole(user?.rol) &&
+      isFieldStaffRole(user?.rol) &&
       String(trip.conductorId) !== String(user.id || user._id)
     ) {
       return res.status(403).json({ message: "No tienes permiso" });
