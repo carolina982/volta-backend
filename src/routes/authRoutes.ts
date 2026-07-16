@@ -160,19 +160,38 @@ router.post("/forgot-password", async (req, res) => {
     user.resetTokenExp=new Date(Date.now()+10 *60 *1000);
     await user.save();
 
-    // enviar correo
-    await resend.emails.send({
-      from:` Volta App <${EMAIL_FROM}>`,
-      to:"al222010146@gmail.com",
+    const nombreUsuario = [user.nombre, user.apellido].filter(Boolean).join(" ").trim() || "Hola";
+
+    // enviar correo AL CORREO DEL USUARIO que lo solicitó (antes estaba fijo)
+    const { data, error } = await resend.emails.send({
+      from: `Volta App <${EMAIL_FROM}>`,
+      to: user.email,
       subject: "Recuperación de contraseña",
       html: `
-       <h2>Recuperación de contraseña</h2>
-        <p>Tu código de recuperación es:</p>
-        <h1>${resetToken}</h1>
-        <p>Este código expira en 10 minutos.</p>
+        <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px;background:#f3f4f6;border-radius:16px">
+          <div style="background:#ffffff;border-radius:14px;padding:28px;border:1px solid #e5e7eb">
+            <h2 style="margin:0 0 8px;color:#111111;font-size:20px">Recuperación de contraseña</h2>
+            <p style="margin:0 0 16px;color:#6b7280;font-size:14px">${nombreUsuario}, usa este código para restablecer tu contraseña:</p>
+            <div style="text-align:center;margin:20px 0">
+              <span style="display:inline-block;font-size:34px;font-weight:800;letter-spacing:8px;color:#111111;background:#f3f4f6;border-radius:12px;padding:14px 22px">${resetToken}</span>
+            </div>
+            <p style="margin:0;color:#9ca3af;font-size:13px">Este código expira en 10 minutos. Si no solicitaste esto, ignora este correo.</p>
+          </div>
+        </div>
       `,
+    });
 
-    })
+    // Resend NO lanza excepción: hay que revisar el campo `error`.
+    if (error) {
+      console.error("Error de Resend al enviar correo:", error);
+      return res.status(502).json({
+        message:
+          "No se pudo enviar el correo. Revisa que el dominio remitente (EMAIL_FROM) esté verificado en Resend.",
+        error: (error as any)?.message || String(error),
+      });
+    }
+
+    console.log("Correo de recuperación enviado a", user.email, "id:", data?.id);
     return res.json({
       message: "Código enviado correctamente",
     });

@@ -11,8 +11,8 @@ export const createUnit =async (req:Request, res:Response)=>{
         }
         const unit:IUnit =await Unit.create(data);
         const newUnit =await Unit.findById(unit._id)
-         .populate("Inventarios.conductorId","nombre");
-         return res.status(201).json(unit);
+         .populate("inventarios.conductorId","nombre");
+         return res.status(201).json(newUnit || unit);
     }catch (error){
         console.error("Error creando unidad",error);
         res.status(500).json({message:"Error creando unidad", error});
@@ -21,7 +21,7 @@ export const createUnit =async (req:Request, res:Response)=>{
 
 export const getUnits =async (req:Request , res:Response)=>{
     try {
-        const units :IUnit[]=await Unit.find().populate("inventarios.conductorId","nombre").sort({createdAt:1});
+        const units :IUnit[]=await Unit.find().populate("inventarios.conductorId","nombre").collation({ locale: "es", numericOrdering: true }).sort({ nombre: 1 });
         res.json(units);
     }catch (error){
         console.error("Error obteniendo unidades" , error),
