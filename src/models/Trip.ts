@@ -83,6 +83,7 @@ export interface ITrip extends Document {
   asignadoPor: string | mongoose.Types.ObjectId | null;
   checklistInicio: IChecklist | null;
   checklistFin: IChecklist | null;
+  finalizadoEn: Date | null;
 }
 const tripSchema = new Schema<ITrip>(
   {
@@ -130,6 +131,7 @@ const tripSchema = new Schema<ITrip>(
     },
     checklistInicio: { type: ChecklistSchema, default: null },
     checklistFin: { type: ChecklistSchema, default: null },
+    finalizadoEn: { type: Date, default: null },
 
 },
   {timestamps:true}

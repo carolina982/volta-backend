@@ -342,6 +342,17 @@ export const updateTrip = async (req: Request, res: Response) => {
       }
     }
 
+    // Marca/limpia la hora real de finalización según el cambio de estado.
+    if (estado !== undefined) {
+      const nuevoEstado = String(estado).toLowerCase();
+      const anterior = String(estadoAnterior).toLowerCase();
+      if (nuevoEstado === "completado" && anterior !== "completado") {
+        trip.finalizadoEn = new Date();
+      } else if (nuevoEstado !== "completado" && anterior === "completado") {
+        trip.finalizadoEn = null;
+      }
+    }
+
     await trip.save();
 
     const acompananteNuevo = trip.acompanante ? String(trip.acompanante) : null;
@@ -531,6 +542,17 @@ export const updateTripOperador = async (req: Request, res: Response) => {
     if (checklistFin !== undefined) {
       const normalized = normalizeChecklist(checklistFin);
       if (normalized) $set.checklistFin = normalized;
+    }
+
+    // Marca la hora real de finalización al pasar a "completado" (y la limpia si se reabre).
+    if ($set.estado !== undefined) {
+      const nuevoEstado = String($set.estado).toLowerCase();
+      const anterior = String(estadoAnterior).toLowerCase();
+      if (nuevoEstado === "completado" && anterior !== "completado") {
+        $set.finalizadoEn = new Date();
+      } else if (nuevoEstado !== "completado" && anterior === "completado") {
+        $set.finalizadoEn = null;
+      }
     }
 
     if (Object.keys($set).length === 0) {
