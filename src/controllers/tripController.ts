@@ -441,6 +441,7 @@ export const updateTripOperador = async (req: Request, res: Response) => {
       multidestino,
       destinoExtra,
       checklistInicio,
+      checklistRecepcion,
       checklistFin,
       checklistParada,
     } = req.body || {};
@@ -538,6 +539,11 @@ export const updateTripOperador = async (req: Request, res: Response) => {
     if (checklistInicio !== undefined) {
       const normalized = normalizeChecklist(checklistInicio);
       if (normalized) $set.checklistInicio = normalized;
+    }
+
+    if (checklistRecepcion !== undefined) {
+      const normalized = normalizeChecklist(checklistRecepcion);
+      if (normalized) $set.checklistRecepcion = normalized;
     }
 
     if (checklistFin !== undefined) {

@@ -21,6 +21,7 @@ const operadorBodyKeys = new Set([
   "multidestino",
   "destinoExtra",
   "checklistInicio",
+  "checklistRecepcion",
   "checklistFin",
   "checklistParada",
 ]);

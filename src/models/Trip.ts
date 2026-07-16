@@ -94,6 +94,7 @@ export interface ITrip extends Document {
   destinoActualIndex: number;
   asignadoPor: string | mongoose.Types.ObjectId | null;
   checklistInicio: IChecklist | null;
+  checklistRecepcion: IChecklist | null;
   checklistFin: IChecklist | null;
   checklistParadas: IChecklistParada[];
   finalizadoEn: Date | null;
@@ -143,6 +144,7 @@ const tripSchema = new Schema<ITrip>(
       default: null,
     },
     checklistInicio: { type: ChecklistSchema, default: null },
+    checklistRecepcion: { type: ChecklistSchema, default: null },
     checklistFin: { type: ChecklistSchema, default: null },
     checklistParadas: { type: [ChecklistParadaSchema], default: [] },
     finalizadoEn: { type: Date, default: null },
