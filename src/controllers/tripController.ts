@@ -556,10 +556,14 @@ export const updateTripOperador = async (req: Request, res: Response) => {
     if (checklistParada !== undefined) {
       const normalized = normalizeChecklist(checklistParada);
       if (normalized) {
+        const recepcionParada = normalizeChecklist(
+          (checklistParada as any)?.recepcion
+        );
         $push.checklistParadas = {
           ...normalized,
           index: Number((checklistParada as any)?.index) || 0,
           destino: String((checklistParada as any)?.destino || ""),
+          recepcion: recepcionParada || null,
         };
       }
     }

@@ -65,6 +65,7 @@ const ChecklistParadaSchema = new Schema(
     items: { type: [ChecklistItemSchema], default: [] },
     extras: { type: String, default: "" },
     completadoEn: { type: Date, default: null },
+    recepcion: { type: ChecklistSchema, default: null },
   },
   { _id: false }
 );
@@ -75,7 +76,11 @@ export type IChecklist = {
   extras?: string;
   completadoEn?: Date | null;
 };
-export type IChecklistParada = IChecklist & { index: number; destino?: string };
+export type IChecklistParada = IChecklist & {
+  index: number;
+  destino?: string;
+  recepcion?: IChecklist | null;
+};
 
 export interface ITrip extends Document {
   rutaAcubrir: string;         
