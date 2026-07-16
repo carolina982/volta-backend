@@ -4,7 +4,7 @@ import jwt from "jsonwebtoken";
 import { EMAIL_FROM, JWT_SECRET } from "../config/config";
 import { resend } from "../config/resend";
 import Trip from "../models/Trip";
-import User from "../models/User";
+import User, { hashPassword, isBcryptHash } from "../models/User";
 
 
 
@@ -74,7 +74,7 @@ router.post("/login", async (req, res) => {
       return res.status(400).json({ message: "Faltan datos" });
     }
 
-    const user = await User.findOne({ email: email.trim().toLowerCase() });
+    const user = await User.findOne({ email: email.trim().toLowerCase() }).select("+password");
 
     if (!user) {
       return res.status(401).json({ message: "Usuario o contraseña incorrectos" });
@@ -92,9 +92,15 @@ router.post("/login", async (req, res) => {
       return res.status(401).json({ message: "Usuario o contraseña incorrectos" });
     }
 
+    if (!isBcryptHash(user.password)) {
+      user.password = await hashPassword(password);
+      user.markModified("password");
+      await user.save();
+    }
+
     const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: "7d" });
 
-    const { password: _pass, ...userData } = user.toObject();
+    const { password: _pass, resetToken: _rt, resetTokenExp: _rte, ...userData } = user.toObject();
 
     return res.json({
       message: "Inicio de sesión exitoso",
@@ -119,7 +125,7 @@ router.post("/forgot-password", async (req, res) => {
 
     const user = await User.findOne({
       email: email.trim().toLowerCase(),
-    });
+    }).select("+resetToken +resetTokenExp");
 
     if (!user) {
       return res.status(404).json({
@@ -179,14 +185,14 @@ router.post("/reset-password", async (req, res) => {
       email: email.trim().toLowerCase(),
       resetToken: token,
       resetTokenExp: { $gt: new Date() },
-    });
+    }).select("+password +resetToken +resetTokenExp");
 
     if (!user) {
       return res.status(400).json({ message: "Token inválido o expirado" });
     }
 
-    // El pre('save') del modelo se encarga del hash
-    user.password = newPassword;
+    user.password = await hashPassword(String(newPassword).trim());
+    user.markModified("password");
     user.resetToken = undefined;
     user.resetTokenExp = undefined;
 

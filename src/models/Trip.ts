@@ -40,6 +40,31 @@ export type IDestinoExtra = {
   kilometrajeLlegada?: Ikilometraje[];
 };
 
+const ChecklistItemSchema = new Schema(
+  {
+    id: { type: String, default: "" },
+    label: { type: String, default: "" },
+    checked: { type: Boolean, default: false },
+  },
+  { _id: false }
+);
+
+const ChecklistSchema = new Schema(
+  {
+    items: { type: [ChecklistItemSchema], default: [] },
+    extras: { type: String, default: "" },
+    completadoEn: { type: Date, default: null },
+  },
+  { _id: false }
+);
+
+export type IChecklistItem = { id: string; label: string; checked: boolean };
+export type IChecklist = {
+  items: IChecklistItem[];
+  extras?: string;
+  completadoEn?: Date | null;
+};
+
 export interface ITrip extends Document {
   rutaAcubrir: string;         
   destino: string;         
@@ -56,6 +81,8 @@ export interface ITrip extends Document {
   destinoExtra: IDestinoExtra[];
   destinoActualIndex: number;
   asignadoPor: string | mongoose.Types.ObjectId | null;
+  checklistInicio: IChecklist | null;
+  checklistFin: IChecklist | null;
 }
 const tripSchema = new Schema<ITrip>(
   {
@@ -101,7 +128,9 @@ const tripSchema = new Schema<ITrip>(
       required: false,
       default: null,
     },
-    
+    checklistInicio: { type: ChecklistSchema, default: null },
+    checklistFin: { type: ChecklistSchema, default: null },
+
 },
   {timestamps:true}
 );

@@ -16,8 +16,17 @@ export interface IUser extends Document {
   comparePassword(password: string): Promise<boolean>;
 }
 
-const isBcryptHash = (value: string) =>
-  typeof value === "string" && /^\$2[aby]\$/.test(value);
+export const isBcryptHash = (value: string) =>
+  typeof value === "string" && /^\$2[aby]\$\d{2}\$/.test(value);
+
+/** Hashea contraseña en texto plano. Si ya es bcrypt, la deja igual. */
+export async function hashPassword(plainOrHash: string): Promise<string> {
+  const value = String(plainOrHash || "");
+  if (!value) return value;
+  if (isBcryptHash(value)) return value;
+  const salt = await bcrypt.genSalt(10);
+  return bcrypt.hash(value, salt);
+}
 
 const userSchema = new Schema<IUser>(
   {
@@ -25,7 +34,7 @@ const userSchema = new Schema<IUser>(
     apellido: { type: String },
     email: { type: String, unique: true, sparse: true, lowercase: true, trim: true },
     // Operadores creados solo como catálogo pueden no tener acceso al login
-    password: { type: String, required: false },
+    password: { type: String, required: false, select: false },
     rol: {
       type: String,
       enum: ["Admin", "Operador", "Ayudante General"],
@@ -34,8 +43,8 @@ const userSchema = new Schema<IUser>(
     contacto: { type: String },
     photoUrl: { type: String, default: null },
     expoPushToken: { type: String, default: null },
-    resetToken: { type: String },
-    resetTokenExp: { type: Date },
+    resetToken: { type: String, select: false },
+    resetTokenExp: { type: Date, select: false },
   },
   { timestamps: true }
 );
@@ -44,8 +53,7 @@ userSchema.pre("save", async function () {
   if (!this.isModified("password") || !this.password) return;
   // Evita doble-hash si ya viene hasheada
   if (isBcryptHash(this.password)) return;
-  const salt = await bcrypt.genSalt(10);
-  this.password = await bcrypt.hash(this.password, salt);
+  this.password = await hashPassword(this.password);
 });
 
 userSchema.pre("findOneAndUpdate", async function () {
@@ -54,9 +62,9 @@ userSchema.pre("findOneAndUpdate", async function () {
 
   const plainUpdate = update as { password?: string; $set?: { password?: string } };
   const password = plainUpdate.$set?.password ?? plainUpdate.password;
-  if (!password || isBcryptHash(password)) return;
+  if (!password) return;
 
-  const hash = await bcrypt.hash(password, 10);
+  const hash = await hashPassword(password);
   if (!plainUpdate.$set) {
     plainUpdate.$set = {};
   }
@@ -66,13 +74,18 @@ userSchema.pre("findOneAndUpdate", async function () {
   }
 });
 
-userSchema.methods.comparePassword = function (password: string) {
-  if (!this.password) return Promise.resolve(false);
-  // Contraseña guardada en texto plano (datos viejos / update roto)
-  if (!isBcryptHash(this.password)) {
-    return Promise.resolve(this.password === password);
+userSchema.methods.comparePassword = async function (password: string) {
+  // Asegura tener el campo aunque password tenga select:false
+  const stored: string | undefined =
+    this.password ||
+    (await mongoose.model<IUser>("User").findById(this._id).select("+password").then((u) => u?.password));
+
+  if (!stored) return false;
+  // Contraseña guardada en texto plano (datos viejos)
+  if (!isBcryptHash(stored)) {
+    return stored === password;
   }
-  return bcrypt.compare(password, this.password);
+  return bcrypt.compare(password, stored);
 };
 
 export default mongoose.model<IUser>("User", userSchema);

@@ -422,10 +422,34 @@ export const updateTripOperador = async (req: Request, res: Response) => {
     if (!trip) return res.status(404).json({ message: "Viaje no encontrado" });
 
     const estadoAnterior = trip.estado;
-    const { estado, destinoActualIndex, fechaSalida, fechaLlegada, multidestino, destinoExtra } =
-      req.body || {};
+    const {
+      estado,
+      destinoActualIndex,
+      fechaSalida,
+      fechaLlegada,
+      multidestino,
+      destinoExtra,
+      checklistInicio,
+      checklistFin,
+    } = req.body || {};
 
     const $set: Record<string, unknown> = {};
+
+    const normalizeChecklist = (raw: any) => {
+      if (!raw || typeof raw !== "object") return undefined;
+      const items = Array.isArray(raw.items)
+        ? raw.items.map((it: any) => ({
+            id: String(it?.id || ""),
+            label: String(it?.label || ""),
+            checked: Boolean(it?.checked),
+          }))
+        : [];
+      return {
+        items,
+        extras: raw.extras != null ? String(raw.extras) : "",
+        completadoEn: raw.completadoEn ? new Date(raw.completadoEn) : new Date(),
+      };
+    };
 
     if (estado !== undefined) {
       const allowed = ["pendiente", "en progreso", "en parada", "completado"];
@@ -497,6 +521,16 @@ export const updateTripOperador = async (req: Request, res: Response) => {
             }))
           : [],
       }));
+    }
+
+    if (checklistInicio !== undefined) {
+      const normalized = normalizeChecklist(checklistInicio);
+      if (normalized) $set.checklistInicio = normalized;
+    }
+
+    if (checklistFin !== undefined) {
+      const normalized = normalizeChecklist(checklistFin);
+      if (normalized) $set.checklistFin = normalized;
     }
 
     if (Object.keys($set).length === 0) {

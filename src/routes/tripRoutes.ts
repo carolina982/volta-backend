@@ -20,6 +20,8 @@ const operadorBodyKeys = new Set([
   "fechaLlegada",
   "multidestino",
   "destinoExtra",
+  "checklistInicio",
+  "checklistFin",
 ]);
 
 const routeOperadorOrAdminUpdate = (req: any, res: any, next: any) => {

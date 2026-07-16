@@ -3,11 +3,13 @@ import { Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { JWT_SECRET } from "../config/config";
 import { transporter } from "../config/mailer";
-import User, { IUser } from "../models/User";
+import User, { hashPassword, isBcryptHash } from "../models/User";
+
+const PUBLIC_USER_FIELDS = "-password -resetToken -resetTokenExp";
 
 export const getUser = async (req: Request, res: Response) => {
   try {
-    const users: IUser[] = await User.find();
+    const users = await User.find().select(PUBLIC_USER_FIELDS);
     return res.json(users);
   } catch (error) {
     console.error("Error obteniendo usuarios:", error);
@@ -21,7 +23,7 @@ export const getUserById = async (req: Request, res: Response) => {
     return res.status(400).json({ message: "ID de usuario inválido" });
   }
   try {
-    const user: IUser | null = await User.findById(id);
+    const user = await User.findById(id).select(PUBLIC_USER_FIELDS);
     if (!user) {
       return res.status(404).json({ message: "Usuario no encontrado" });
     }
@@ -77,12 +79,14 @@ export const createUser = async (req: Request, res: Response) => {
       }
     }
 
+    const hashedPassword = await hashPassword(String(password).trim());
+
     const user = await User.create({
       nombre,
       apellido,
       rol: role,
       email: email ? email.toLowerCase() : undefined,
-      password: password || undefined,
+      password: hashedPassword,
       contacto,
     });
 
@@ -131,11 +135,13 @@ export const registerUser = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Usuario ya existe" });
     }
 
+    const hashedPassword = await hashPassword(String(password).trim());
+
     const newUser = await User.create({
       nombre,
       apellido,
       email: email.toLowerCase(),
-      password,
+      password: hashedPassword,
       rol: role,
       contacto,
       photoUrl: req.file ? `/uploads/${req.file.filename}` : null,
@@ -185,7 +191,7 @@ export const loginUser = async (req: Request, res: Response) => {
   try {
     const cleanEmail = email.trim().toLowerCase();
 
-    const user = await User.findOne({ email: cleanEmail });
+    const user = await User.findOne({ email: cleanEmail }).select("+password");
 
     if (!user) {
       return res.status(401).json({
@@ -198,15 +204,19 @@ export const loginUser = async (req: Request, res: Response) => {
         message:"Este usuario no tiene acceso al inicio se sion "
       })
     }
-    console.log("Email recibido",email);
-    console.log("Password recibida",password);
-    console.log("password guardada",user.password);
-     const isMatch=await user.comparePassword(password);
-    console.log("coincide",isMatch);
+
+    const isMatch = await user.comparePassword(password);
     if (!isMatch) {
       return res.status(401).json({
         message: "Usuario o contraseña incorrectos",
       });
+    }
+
+    // Migra contraseñas viejas en texto plano la primera vez que hacen login
+    if (!isBcryptHash(user.password)) {
+      user.password = await hashPassword(password);
+      user.markModified("password");
+      await user.save();
     }
 
     const token = jwt.sign(
@@ -235,7 +245,7 @@ export const updateUser = async (req: Request, res: Response) => {
   try {
     const { nombre, apellido, email, password, rol, contacto } = req.body;
 
-    const user = await User.findById(req.params.id);
+    const user = await User.findById(req.params.id).select("+password");
     if (!user) {
       return res.status(404).json({ message: "Usuario no encontrado" });
     }
@@ -270,7 +280,8 @@ export const updateUser = async (req: Request, res: Response) => {
           message: "El usuario necesita un correo para poder iniciar sesión con contraseña",
         });
       }
-      user.password = plain;
+      // Hash explícito al editar (no se guarda en texto plano)
+      user.password = await hashPassword(plain);
       user.markModified("password");
     }
 
@@ -282,6 +293,8 @@ export const updateUser = async (req: Request, res: Response) => {
 
     const userObj = user.toObject();
     delete (userObj as { password?: string }).password;
+    delete (userObj as { resetToken?: string }).resetToken;
+    delete (userObj as { resetTokenExp?: Date }).resetTokenExp;
     return res.json(userObj);
   } catch (error: any) {
     console.error("Error al actualizar usuario", error);
@@ -362,7 +375,9 @@ export const forgotPassword = async (req: Request, res: Response) => {
   }
 
   try {
-    const user = await User.findOne({ email: email.toLowerCase() }); 
+    const user = await User.findOne({ email: email.toLowerCase() }).select(
+      "+resetToken +resetTokenExp"
+    ); 
     if (!user) {
       return res.status(404).json({ message: "Usuario no encontrado" });
     }
@@ -396,12 +411,13 @@ export const resetPassword = async (req: Request, res: Response) => {
     const user = await User.findOne({
       resetToken: token,
       resetTokenExp: { $gt: new Date() },
-    });
+    }).select("+password +resetToken +resetTokenExp");
     if (!user) {
       return res.status(400).json({ message: "Token inválido o expirado" });
     }
-    // El pre('save') del modelo se encarga del hash
-    user.password = password;
+    // Hash explícito; el pre('save') no vuelve a hashear si ya es bcrypt
+    user.password = await hashPassword(String(password).trim());
+    user.markModified("password");
     user.resetToken = undefined;
     user.resetTokenExp = undefined;
     await user.save();
