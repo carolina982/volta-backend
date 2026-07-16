@@ -307,6 +307,18 @@ export const updateUserPhoto = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Debes seleccionar una imagen" });
     }
 
+    const authUser = (req as any).user;
+    const targetId = String(req.params.id || "");
+    const authId = String(authUser?._id || authUser?.id || "");
+    const role = String(authUser?.rol || "").toLowerCase();
+    const isAdmin = role === "admin";
+
+    if (!isAdmin && authId && targetId && authId !== targetId) {
+      return res.status(403).json({
+        message: "No puedes cambiar la foto de otro usuario",
+      });
+    }
+
     const user = await User.findByIdAndUpdate(
       req.params.id,
       { photoUrl: `/uploads/${req.file.filename}` },
