@@ -22,6 +22,7 @@ const operadorBodyKeys = new Set([
   "destinoExtra",
   "checklistInicio",
   "checklistFin",
+  "checklistParada",
 ]);
 
 const routeOperadorOrAdminUpdate = (req: any, res: any, next: any) => {

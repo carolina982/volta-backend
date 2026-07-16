@@ -68,13 +68,32 @@ router.put("/trips/:id", async (req, res) => {
 // LOGIN
 router.post("/login", async (req, res) => {
   try {
-    const { email, password } = req.body;
+    // "email" puede ser un correo o un nombre de usuario (se acepta cualquiera).
+    const { email, identifier, password } = req.body;
+    const rawIdentifier = String(identifier ?? email ?? "").trim();
 
-    if (!email || !password) {
+    if (!rawIdentifier || !password) {
       return res.status(400).json({ message: "Faltan datos" });
     }
 
-    const user = await User.findOne({ email: email.trim().toLowerCase() }).select("+password");
+    const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+    // Busca por correo (exacto, en minúsculas) o por nombre (sin distinguir mayúsculas).
+    const user = await User.findOne({
+      $or: [
+        { email: rawIdentifier.toLowerCase() },
+        { nombre: new RegExp(`^${escapeRegex(rawIdentifier)}$`, "i") },
+        {
+          $expr: {
+            $regexMatch: {
+              input: { $concat: ["$nombre", " ", { $ifNull: ["$apellido", ""] }] },
+              regex: `^${escapeRegex(rawIdentifier)}$`,
+              options: "i",
+            },
+          },
+        },
+      ],
+    }).select("+password");
 
     if (!user) {
       return res.status(401).json({ message: "Usuario o contraseña incorrectos" });

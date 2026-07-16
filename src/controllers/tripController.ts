@@ -442,6 +442,7 @@ export const updateTripOperador = async (req: Request, res: Response) => {
       destinoExtra,
       checklistInicio,
       checklistFin,
+      checklistParada,
     } = req.body || {};
 
     const $set: Record<string, unknown> = {};
@@ -544,6 +545,19 @@ export const updateTripOperador = async (req: Request, res: Response) => {
       if (normalized) $set.checklistFin = normalized;
     }
 
+    // Checklist de una parada (multidestino): se agrega al historial de paradas.
+    const $push: Record<string, unknown> = {};
+    if (checklistParada !== undefined) {
+      const normalized = normalizeChecklist(checklistParada);
+      if (normalized) {
+        $push.checklistParadas = {
+          ...normalized,
+          index: Number((checklistParada as any)?.index) || 0,
+          destino: String((checklistParada as any)?.destino || ""),
+        };
+      }
+    }
+
     // Marca la hora real de finalización al pasar a "completado" (y la limpia si se reabre).
     if ($set.estado !== undefined) {
       const nuevoEstado = String($set.estado).toLowerCase();
@@ -555,15 +569,18 @@ export const updateTripOperador = async (req: Request, res: Response) => {
       }
     }
 
-    if (Object.keys($set).length === 0) {
+    if (Object.keys($set).length === 0 && Object.keys($push).length === 0) {
       return res.status(400).json({ message: "No hay cambios para aplicar" });
     }
 
-    const updated = await Trip.findByIdAndUpdate(
-      tripId,
-      { $set },
-      { new: true, runValidators: false }
-    );
+    const updateOps: Record<string, unknown> = {};
+    if (Object.keys($set).length > 0) updateOps.$set = $set;
+    if (Object.keys($push).length > 0) updateOps.$push = $push;
+
+    const updated = await Trip.findByIdAndUpdate(tripId, updateOps, {
+      new: true,
+      runValidators: false,
+    });
 
     if (!updated) {
       return res.status(404).json({ message: "Viaje no encontrado" });

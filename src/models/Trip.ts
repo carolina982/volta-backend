@@ -58,12 +58,24 @@ const ChecklistSchema = new Schema(
   { _id: false }
 );
 
+const ChecklistParadaSchema = new Schema(
+  {
+    index: { type: Number, default: 0 },
+    destino: { type: String, default: "" },
+    items: { type: [ChecklistItemSchema], default: [] },
+    extras: { type: String, default: "" },
+    completadoEn: { type: Date, default: null },
+  },
+  { _id: false }
+);
+
 export type IChecklistItem = { id: string; label: string; checked: boolean };
 export type IChecklist = {
   items: IChecklistItem[];
   extras?: string;
   completadoEn?: Date | null;
 };
+export type IChecklistParada = IChecklist & { index: number; destino?: string };
 
 export interface ITrip extends Document {
   rutaAcubrir: string;         
@@ -83,6 +95,7 @@ export interface ITrip extends Document {
   asignadoPor: string | mongoose.Types.ObjectId | null;
   checklistInicio: IChecklist | null;
   checklistFin: IChecklist | null;
+  checklistParadas: IChecklistParada[];
   finalizadoEn: Date | null;
 }
 const tripSchema = new Schema<ITrip>(
@@ -131,6 +144,7 @@ const tripSchema = new Schema<ITrip>(
     },
     checklistInicio: { type: ChecklistSchema, default: null },
     checklistFin: { type: ChecklistSchema, default: null },
+    checklistParadas: { type: [ChecklistParadaSchema], default: [] },
     finalizadoEn: { type: Date, default: null },
 
 },
