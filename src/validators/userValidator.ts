@@ -4,7 +4,18 @@ const VALID_ROLES = ["Admin", "Operador", "Ayudante General"];
 
 export const registerUserValidator = [
   body("nombre").notEmpty().withMessage("El nombre es obligatorio"),
-  body("apellido").notEmpty().withMessage("El apellido es obligatorio"),
+  body("apellidoPaterno")
+    .optional({ nullable: true })
+    .isString(),
+  body("apellido")
+    .custom((value, { req }) => {
+      const paterno = String(req.body?.apellidoPaterno || "").trim();
+      const legacy = String(value || "").trim();
+      if (!paterno && !legacy) {
+        throw new Error("El apellido paterno es obligatorio");
+      }
+      return true;
+    }),
   body("email").isEmail().withMessage("Correo invalido"),
   body("password").notEmpty().withMessage("La contraseña es obligatoria"),
   body("rol")

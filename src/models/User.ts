@@ -3,7 +3,10 @@ import mongoose, { Document, Schema } from "mongoose";
 
 export interface IUser extends Document {
   nombre: string;
+  /** Apellido completo (paterno + materno). Se mantiene por compatibilidad. */
   apellido: string;
+  apellidoPaterno?: string;
+  apellidoMaterno?: string;
   email: string;
   password: string;
   rol: string;
@@ -14,6 +17,14 @@ export interface IUser extends Document {
   resetTokenExp?: Date;
 
   comparePassword(password: string): Promise<boolean>;
+}
+
+/** Une apellido paterno + materno en un solo string. */
+export function joinApellidos(paterno?: string | null, materno?: string | null) {
+  return [paterno, materno]
+    .map((s) => String(s || "").trim())
+    .filter(Boolean)
+    .join(" ");
 }
 
 export const isBcryptHash = (value: string) =>
@@ -32,6 +43,8 @@ const userSchema = new Schema<IUser>(
   {
     nombre: { type: String, required: true },
     apellido: { type: String },
+    apellidoPaterno: { type: String, default: "" },
+    apellidoMaterno: { type: String, default: "" },
     email: { type: String, unique: true, sparse: true, lowercase: true, trim: true },
     // Operadores creados solo como catálogo pueden no tener acceso al login
     password: { type: String, required: false, select: false },

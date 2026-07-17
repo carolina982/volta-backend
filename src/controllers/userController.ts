@@ -3,9 +3,34 @@ import { Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { JWT_SECRET } from "../config/config";
 import { transporter } from "../config/mailer";
-import User, { hashPassword, isBcryptHash } from "../models/User";
+import User, { hashPassword, isBcryptHash, joinApellidos } from "../models/User";
 
 const PUBLIC_USER_FIELDS = "-password -resetToken -resetTokenExp";
+
+/** Resuelve apellidos desde el body (soporta campos nuevos o el apellido legado). */
+const resolveApellidos = (body: {
+  apellido?: string;
+  apellidoPaterno?: string;
+  apellidoMaterno?: string;
+}) => {
+  const hasSplit =
+    body.apellidoPaterno !== undefined || body.apellidoMaterno !== undefined;
+  if (hasSplit) {
+    const apellidoPaterno = String(body.apellidoPaterno ?? "").trim();
+    const apellidoMaterno = String(body.apellidoMaterno ?? "").trim();
+    return {
+      apellidoPaterno,
+      apellidoMaterno,
+      apellido: joinApellidos(apellidoPaterno, apellidoMaterno),
+    };
+  }
+  const apellido = String(body.apellido ?? "").trim();
+  return {
+    apellidoPaterno: apellido,
+    apellidoMaterno: "",
+    apellido,
+  };
+};
 
 export const getUser = async (req: Request, res: Response) => {
   try {
@@ -48,11 +73,12 @@ const normalizeRole = (rol: string) => {
 
 export const createUser = async (req: Request, res: Response) => {
   try {
-    const { nombre, apellido, email, password, rol, contacto } = req.body;
+    const { nombre, email, password, rol, contacto } = req.body;
+    const apellidos = resolveApellidos(req.body);
 
-    if (!nombre || !apellido || !rol) {
+    if (!nombre || !apellidos.apellidoPaterno || !rol) {
       return res.status(400).json({
-        message: "Nombre, apellido y rol son obligatorios",
+        message: "Nombre, apellido paterno y rol son obligatorios",
       });
     }
 
@@ -83,7 +109,9 @@ export const createUser = async (req: Request, res: Response) => {
 
     const user = await User.create({
       nombre,
-      apellido,
+      apellido: apellidos.apellido,
+      apellidoPaterno: apellidos.apellidoPaterno,
+      apellidoMaterno: apellidos.apellidoMaterno,
       rol: role,
       email: email ? email.toLowerCase() : undefined,
       password: hashedPassword,
@@ -114,9 +142,10 @@ export const createUser = async (req: Request, res: Response) => {
 // Registrar usuario
 export const registerUser = async (req: Request, res: Response) => {
   try {
-    const { nombre, apellido, email, password, rol, contacto } = req.body;
+    const { nombre, email, password, rol, contacto } = req.body;
+    const apellidos = resolveApellidos(req.body);
 
-    if (!nombre || !apellido || !email || !password || !rol) {
+    if (!nombre || !apellidos.apellidoPaterno || !email || !password || !rol) {
       return res.status(400).json({ message: "Faltan datos obligatorios" });
     }
 
@@ -139,7 +168,9 @@ export const registerUser = async (req: Request, res: Response) => {
 
     const newUser = await User.create({
       nombre,
-      apellido,
+      apellido: apellidos.apellido,
+      apellidoPaterno: apellidos.apellidoPaterno,
+      apellidoMaterno: apellidos.apellidoMaterno,
       email: email.toLowerCase(),
       password: hashedPassword,
       rol: role,
@@ -157,6 +188,8 @@ export const registerUser = async (req: Request, res: Response) => {
       _id: newUser._id,
       nombre: newUser.nombre,
       apellido: newUser.apellido,
+      apellidoPaterno: newUser.apellidoPaterno || "",
+      apellidoMaterno: newUser.apellidoMaterno || "",
       email: newUser.email,
       rol: newUser.rol,
       contacto: newUser.contacto,
@@ -229,6 +262,8 @@ export const loginUser = async (req: Request, res: Response) => {
       _id: user._id,
       nombre: user.nombre,
       apellido: user.apellido,
+      apellidoPaterno: user.apellidoPaterno || "",
+      apellidoMaterno: user.apellidoMaterno || "",
       email: user.email,
       rol: user.rol,
       photoUrl: user.photoUrl || null,
@@ -243,7 +278,7 @@ export const loginUser = async (req: Request, res: Response) => {
   
 export const updateUser = async (req: Request, res: Response) => {
   try {
-    const { nombre, apellido, email, password, rol, contacto } = req.body;
+    const { nombre, email, password, rol, contacto } = req.body;
 
     const user = await User.findById(req.params.id).select("+password");
     if (!user) {
@@ -251,7 +286,29 @@ export const updateUser = async (req: Request, res: Response) => {
     }
 
     if (nombre !== undefined) user.nombre = String(nombre).trim();
-    if (apellido !== undefined) user.apellido = String(apellido).trim();
+
+    if (
+      req.body.apellidoPaterno !== undefined ||
+      req.body.apellidoMaterno !== undefined
+    ) {
+      const paterno =
+        req.body.apellidoPaterno !== undefined
+          ? String(req.body.apellidoPaterno).trim()
+          : String(user.apellidoPaterno || "").trim();
+      const materno =
+        req.body.apellidoMaterno !== undefined
+          ? String(req.body.apellidoMaterno).trim()
+          : String(user.apellidoMaterno || "").trim();
+      user.apellidoPaterno = paterno;
+      user.apellidoMaterno = materno;
+      user.apellido = joinApellidos(paterno, materno);
+    } else if (req.body.apellido !== undefined) {
+      const apellidos = resolveApellidos({ apellido: req.body.apellido });
+      user.apellidoPaterno = apellidos.apellidoPaterno;
+      user.apellidoMaterno = apellidos.apellidoMaterno;
+      user.apellido = apellidos.apellido;
+    }
+
     if (email !== undefined) {
       const nextEmail = String(email).trim().toLowerCase();
       user.email = nextEmail || (undefined as unknown as string);
