@@ -121,6 +121,49 @@ router.post("/:id/inventarios", verifyToken, authorize(["Admin"]), async (req, r
   }
 });
 
+// Eliminar un inventario específico. Solo Admin.
+router.delete(
+  "/:id/inventarios/:inventarioId",
+  verifyToken,
+  authorize(["Admin"]),
+  async (req, res) => {
+    try {
+      const { id, inventarioId } = req.params;
+      const unit = await Unit.findById(id);
+      if (!unit) {
+        return res.status(404).json({ error: "Unidad no encontrada" });
+      }
+
+      const target = (unit.inventarios || []).find(
+        (inv: any) => String(inv._id) === String(inventarioId)
+      );
+
+      // Intentar borrar el archivo de firma asociado (si existe localmente)
+      if (target?.firmaUrl) {
+        try {
+          const firmaName = target.firmaUrl.split("/uploads/")[1];
+          if (firmaName) {
+            const firmaPath = path.join(uploadDir, firmaName);
+            if (fs.existsSync(firmaPath)) fs.unlinkSync(firmaPath);
+          }
+        } catch (e) {
+          console.warn("No se pudo borrar el archivo de firma", e);
+        }
+      }
+
+      unit.inventarios = (unit.inventarios || []).filter(
+        (inv: any) => String(inv._id) !== String(inventarioId)
+      );
+      await unit.save();
+
+      res.json({ ok: true, inventarios: unit.inventarios });
+    } catch (error) {
+      console.error("ERROR ELIMINANDO INVENTARIO", error);
+      res.status(500).json({ error: "Error eliminando inventario" });
+    }
+  }
+);
+
 // Historial de inventarios de una unidad (más reciente primero). Solo Admin.
 router.get("/:id/inventarios", verifyToken, authorize(["Admin"]), async (req, res) => {
   try {
