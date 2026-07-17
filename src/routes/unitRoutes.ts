@@ -1,10 +1,17 @@
 import { Router } from "express";
+import fs from "fs";
 import mongoose from "mongoose";
+import path from "path";
 import { createUnit, deleteUnit, getUnitById, getUnitCount, getUnits, updateUnit } from "../controllers/unitController";
+import { authorize } from "../middlewares/authorize";
+import { verifyToken } from "../middlewares/auth";
 import { upload } from "../middlewares/upload";
 import { validate } from "../middlewares/validate";
 import Unit from "../models/Unit";
+import User from "../models/User";
 import { createUnitValidator, updateUnitValidator } from "../validators/unitValidator";
+
+const uploadDir = path.join(__dirname, "../../uploads");
 
 
 const router =Router ();
@@ -50,82 +57,88 @@ router.post("/:id/image",upload.single("image"),async (req, res) => {
   }
 );
 
-router.post("/:id/inventario", upload.single("file"), async (req, res) => {
+// Crear un inventario de entrega (texto libre + firma). Solo Admin. Histórico: no se sobrescribe.
+router.post("/:id/inventarios", verifyToken, authorize(["Admin"]), async (req, res) => {
   try {
-    const conductorIdRaw = req.body?.conductorId;
-    if (!req.file) {
-      return res.status(400).json({ error: "No se recibio archivo" });
-    };
+    const { contenido, operadorId, firmaBase64 } = req.body || {};
 
-    console.log("MIMETYPE",req.file.mimetype);
-    console.log("FILE",req.file);
-    //if (req.file.mimetype !== "application/pdf") {
-      //return res.status(400).json({ error: "Solo se permite PDF" });
-    //}
+    if (!contenido || !String(contenido).trim()) {
+      return res.status(400).json({ error: "El inventario no puede estar vacío" });
+    }
+    if (!firmaBase64 || typeof firmaBase64 !== "string") {
+      return res.status(400).json({ error: "Falta la firma" });
+    }
+
+    const matches = firmaBase64.match(/^data:image\/(png|jpeg|jpg);base64,(.+)$/);
+    if (!matches) {
+      return res.status(400).json({ error: "Firma inválida" });
+    }
+
     const unit = await Unit.findById(req.params.id);
-
     if (!unit) {
       return res.status(404).json({ error: "Unidad no encontrada" });
     }
 
-    if (!unit.inventarios) {
-      unit.inventarios = [];
+    // Guardar la firma como archivo PNG en /uploads
+    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+    const ext = matches[1] === "png" ? "png" : "jpg";
+    const filename = `firma-${Date.now()}.${ext}`;
+    fs.writeFileSync(path.join(uploadDir, filename), Buffer.from(matches[2], "base64"));
+    const firmaUrl = `${req.protocol}://${req.get("host")}/uploads/${filename}`;
+
+    // Operador asignado (nombre snapshot)
+    let operadorObjId: mongoose.Types.ObjectId | null = null;
+    let operadorNombre = "";
+    if (operadorId && mongoose.Types.ObjectId.isValid(operadorId)) {
+      operadorObjId = new mongoose.Types.ObjectId(operadorId);
+      const op = await User.findById(operadorObjId).select("nombre apellido");
+      if (op) operadorNombre = `${op.nombre || ""} ${op.apellido || ""}`.trim();
     }
 
-    const fileUrl = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
-    const conductorId =
-      conductorIdRaw && mongoose.Types.ObjectId.isValid(conductorIdRaw)
-        ? new mongoose.Types.ObjectId(conductorIdRaw)
-        : undefined;
+    // Admin que crea el registro
+    const admin = (req as any).user;
+    const creadoPorNombre = admin
+      ? `${admin.nombre || ""} ${admin.apellido || ""}`.trim()
+      : "";
 
+    if (!unit.inventarios) unit.inventarios = [];
     unit.inventarios.push({
-      archivo: fileUrl,
-      ...(conductorId ? { conductorId } : {}),
+      contenido: String(contenido).trim(),
+      firmaUrl,
+      operadorId: operadorObjId,
+      operadorNombre,
+      creadoPorId: admin?._id ?? null,
+      creadoPorNombre,
       fecha: new Date(),
     } as any);
+
     await unit.save();
 
-    
-    res.json({ ok: true, inventarios: unit.inventarios, });
+    res.json({ ok: true, inventarios: unit.inventarios });
   } catch (error) {
     console.error("ERROR INVENTARIO", error);
-
-    res.status(500).json({
-      error: "Error subiendo archivo",
-    });
+    res.status(500).json({ error: "Error guardando inventario" });
   }
 });
 
-
-router.delete("/:unitId/inventarios/:inventarioId", async (req ,res)=>{
-    try {
-        const {unitId,inventarioId}=req.params;
-        const unit=await Unit.findById(unitId);
-        if (!unit){
-            return res.status(404).json({error:"Unidad no econtrada"});
-        }
-        unit.inventarios=unit.inventarios?.filter(
-            (inv:any) => inv._id.toString() !== inventarioId
-        );
-        await unit.save();
-        res.json({ok:true,inventarios:unit.inventarios});
-    }catch (error){
-        res.status(500).json({error:"Error eliminando inventario "})
+// Historial de inventarios de una unidad (más reciente primero). Solo Admin.
+router.get("/:id/inventarios", verifyToken, authorize(["Admin"]), async (req, res) => {
+  try {
+    const unit = await Unit.findById(req.params.id).populate(
+      "inventarios.operadorId",
+      "nombre apellido"
+    );
+    if (!unit) {
+      return res.status(404).json({ error: "unidad no encontrada" });
     }
-});
-
-router.get("/:id/inventarios",async (req , res) =>{
-    try {
-        const unit =await Unit.findById(req.params.id)
-        .populate("inventarios.conductorId","nombre");
-        if (!unit){
-            return res.status(404).json({error:"unidad no econtrada"});
-        }
-        res.json(unit.inventarios || []);
-    }catch (error){
-        console.error(error);
-        res.status(500).json({error:"Error obteniendo inventarios"});
-    }
+    const list = [...(unit.inventarios || [])].sort(
+      (a: any, b: any) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime()
+    );
+    res.json(list);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error obteniendo inventarios" });
+  }
 });
 
 export default  router;

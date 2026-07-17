@@ -1,5 +1,16 @@
 import mongoose, { Document, Schema } from "mongoose";
 
+/** Inventario de entrega: registro manual (texto libre) + firma digital. Histórico, no se sobrescribe. */
+export interface IInventarioUnidad {
+  contenido: string;
+  firmaUrl: string;
+  operadorId?: mongoose.Types.ObjectId | null;
+  operadorNombre: string;
+  creadoPorId?: mongoose.Types.ObjectId | null;
+  creadoPorNombre: string;
+  fecha: Date;
+}
+
 export interface IUnit extends Document {
     nombre:string;
     placas:string;
@@ -10,12 +21,22 @@ export interface IUnit extends Document {
     placaRemolque?:string;
     imagenUrl:string;
 
-    inventarios?:{
-      archivo:string;
-      conductorId:mongoose.Types.ObjectId;
-      fecha:Date;
-    }[];
+    inventarios?: IInventarioUnidad[];
 }
+
+const InventarioSchema = new Schema<IInventarioUnidad>(
+  {
+    contenido: { type: String, default: "" },
+    firmaUrl: { type: String, default: "" },
+    operadorId: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    operadorNombre: { type: String, default: "" },
+    creadoPorId: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    creadoPorNombre: { type: String, default: "" },
+    fecha: { type: Date, default: Date.now },
+  },
+  { _id: true }
+);
+
 const uniSchema =new Schema<IUnit> ({
     nombre:{type:String , required:true},
     placas:{type:String , required:true},
@@ -25,13 +46,7 @@ const uniSchema =new Schema<IUnit> ({
     tipoRemolque:{type:String, enum:["Lowboy","Caja Seca",""],default:""},
     placaRemolque:{type:String,default:""},
     imagenUrl:{type:String,default:""},
-    inventarios:[
-      {
-        archivo:{type:String, required:true},
-        conductorId:{type:Schema.Types.ObjectId,ref:"User"},
-        fecha:{type:Date,default:Date.now}
-      }
-    ],
+    inventarios:{ type: [InventarioSchema], default: [] },
 },
 {timestamps:true}
 );
