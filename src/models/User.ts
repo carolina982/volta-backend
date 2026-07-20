@@ -11,6 +11,8 @@ export interface IUser extends Document {
   password: string;
   rol: string;
   contacto: string;
+  /** false = desactivado (sigue en BD, no aparece en asignaciones). */
+  activo: boolean;
   photoUrl?: string | null;
   expoPushToken?: string | null;
   resetToken?: string;
@@ -54,6 +56,7 @@ const userSchema = new Schema<IUser>(
       required: true,
     },
     contacto: { type: String },
+    activo: { type: Boolean, default: true },
     photoUrl: { type: String, default: null },
     expoPushToken: { type: String, default: null },
     resetToken: { type: String, select: false },

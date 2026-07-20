@@ -34,7 +34,17 @@ const resolveApellidos = (body: {
 
 export const getUser = async (req: Request, res: Response) => {
   try {
-    const users = await User.find().select(PUBLIC_USER_FIELDS);
+    const filter: Record<string, unknown> = {};
+    const activoQ = String(req.query.activo ?? "").toLowerCase();
+    if (activoQ === "true" || activoQ === "1") {
+      // Incluye documentos antiguos sin el campo (se tratan como activos).
+      filter.$or = [{ activo: true }, { activo: { $exists: false } }];
+    } else if (activoQ === "false" || activoQ === "0") {
+      filter.activo = false;
+    }
+    const users = await User.find(filter)
+      .select(PUBLIC_USER_FIELDS)
+      .sort({ nombre: 1, apellido: 1 });
     return res.json(users);
   } catch (error) {
     console.error("Error obteniendo usuarios:", error);
@@ -73,7 +83,7 @@ const normalizeRole = (rol: string) => {
 
 export const createUser = async (req: Request, res: Response) => {
   try {
-    const { nombre, email, password, rol, contacto } = req.body;
+    const { nombre, email, password, rol, contacto, activo } = req.body;
     const apellidos = resolveApellidos(req.body);
 
     if (!nombre || !apellidos.apellidoPaterno || !rol) {
@@ -87,35 +97,45 @@ export const createUser = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Rol no válido" });
     }
 
-    if (!email || !password) {
-      return res.status(400).json({
-        message: "Correo y contraseña son obligatorios",
-      });
-    }
+    const emailTrim = email ? String(email).trim().toLowerCase() : "";
+    const passwordTrim = password ? String(password).trim() : "";
 
-    if (email) {
-      const existingUser = await User.findOne({
-        email: email.toLowerCase(),
-      });
-
+    // Nombre/apellidos bastan al crear. Correo/contraseña/contacto son opcionales
+    // (si se envían, se guardan; el acceso se puede completar al editar).
+    if (emailTrim) {
+      const existingUser = await User.findOne({ email: emailTrim });
       if (existingUser) {
-        return res.status(400).json({
-          message: "Usuario ya existe",
-        });
+        return res.status(400).json({ message: "Usuario ya existe" });
       }
     }
 
-    const hashedPassword = await hashPassword(String(password).trim());
+    if (passwordTrim && passwordTrim.length < 6) {
+      return res.status(400).json({
+        message: "La contraseña debe tener al menos 6 caracteres",
+      });
+    }
+
+    if ((emailTrim && !passwordTrim) || (!emailTrim && passwordTrim)) {
+      return res.status(400).json({
+        message: "Si das acceso, envía correo y contraseña juntos",
+      });
+    }
+
+    const hashedPassword = passwordTrim ? await hashPassword(passwordTrim) : undefined;
+    const isActivo = activo === undefined || activo === null ? true : Boolean(activo);
 
     const user = await User.create({
-      nombre,
+      nombre: String(nombre).trim(),
       apellido: apellidos.apellido,
       apellidoPaterno: apellidos.apellidoPaterno,
       apellidoMaterno: apellidos.apellidoMaterno,
       rol: role,
-      email: email ? email.toLowerCase() : undefined,
-      password: hashedPassword,
-      contacto,
+      activo: isActivo,
+      ...(emailTrim ? { email: emailTrim } : {}),
+      ...(hashedPassword ? { password: hashedPassword } : {}),
+      ...(contacto != null && String(contacto).trim()
+        ? { contacto: String(contacto).trim() }
+        : {}),
     });
 
     const userObj = user.toObject();
@@ -232,6 +252,12 @@ export const loginUser = async (req: Request, res: Response) => {
       });
     }
 
+    if (user.activo === false) {
+      return res.status(403).json({
+        message: "Este usuario está desactivado. Contacta al administrador.",
+      });
+    }
+
     if (!user.password){
       return res.status(401).json({
         message:"Este usuario no tiene acceso al inicio se sion "
@@ -266,6 +292,7 @@ export const loginUser = async (req: Request, res: Response) => {
       apellidoMaterno: user.apellidoMaterno || "",
       email: user.email,
       rol: user.rol,
+      activo: user.activo !== false,
       photoUrl: user.photoUrl || null,
       contacto: user.contacto,
       token,
@@ -278,7 +305,7 @@ export const loginUser = async (req: Request, res: Response) => {
   
 export const updateUser = async (req: Request, res: Response) => {
   try {
-    const { nombre, email, password, rol, contacto } = req.body;
+    const { nombre, email, password, rol, contacto, activo } = req.body;
 
     const user = await User.findById(req.params.id).select("+password");
     if (!user) {
@@ -311,9 +338,17 @@ export const updateUser = async (req: Request, res: Response) => {
 
     if (email !== undefined) {
       const nextEmail = String(email).trim().toLowerCase();
-      user.email = nextEmail || (undefined as unknown as string);
+      if (nextEmail) {
+        user.email = nextEmail;
+      } else {
+        user.set("email", undefined);
+      }
     }
     if (contacto !== undefined) user.contacto = String(contacto).trim();
+
+    if (activo !== undefined && activo !== null) {
+      user.activo = Boolean(activo);
+    }
 
     if (rol !== undefined) {
       const role = normalizeRole(String(rol));
@@ -408,18 +443,25 @@ export const updateUserPhoto = async (req: Request, res: Response) => {
   }
 };
 
+/** Desactiva el usuario (soft delete). No se borra de la base de datos. */
 export const deleteUser = async (req: Request, res: Response) => {
   const { id } = req.params;
-  console.log("Id recibiendo en backend", id);
   try {
-    const user = await User.findByIdAndDelete(id);
+    const user = await User.findByIdAndUpdate(
+      id,
+      { activo: false },
+      { new: true }
+    ).select(PUBLIC_USER_FIELDS);
     if (!user) {
       return res.status(404).json({ message: "Usuario no encontrado" });
     }
-    res.json({ message: "Usuario eliminado correctamente" });
+    return res.json({
+      message: "Usuario desactivado correctamente",
+      user,
+    });
   } catch (error) {
-    console.error("Error eliminando usuario", error);
-    res.status(500).json({ message: "Error eliminando usuario" });
+    console.error("Error desactivando usuario", error);
+    return res.status(500).json({ message: "Error desactivando usuario" });
   }
 };
 
