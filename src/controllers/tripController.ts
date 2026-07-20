@@ -140,6 +140,7 @@ export const createTrip = async (req: Request, res: Response) => {
       kilometrajeLlegada, 
       acompanante, 
       def,
+      tarjeta,
       multidestino,
       destinoExtra,
     } = req.body;
@@ -194,6 +195,7 @@ const newTrip = new Trip({
       ? null
       : new mongoose.Types.ObjectId(String(acompanante)),
   def: def || "",
+  tarjeta: String(tarjeta || "").trim(),
   multidestino: Boolean(multidestino),
   destinoExtra: Boolean(multidestino) ? normalizeDestinosExtras(destinoExtra) : [],
   destinoActualIndex: 0,
@@ -269,6 +271,7 @@ export const updateTrip = async (req: Request, res: Response) => {
       conductorId, 
       acompanante, 
       def,
+      tarjeta,
       multidestino,
       destinoExtra,
       destinoActualIndex,
@@ -280,6 +283,7 @@ export const updateTrip = async (req: Request, res: Response) => {
     if (unidadId !== undefined) trip.unidadId = unidadId;
     if (estado !== undefined) trip.estado = estado;
     if (def !== undefined) trip.def = def;
+    if (tarjeta !== undefined) trip.tarjeta = String(tarjeta || "").trim();
     if (destinoActualIndex !== undefined) {
       trip.destinoActualIndex = Number(destinoActualIndex) || 0;
     }

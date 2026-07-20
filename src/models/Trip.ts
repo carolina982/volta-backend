@@ -94,6 +94,7 @@ export interface ITrip extends Document {
   kilometrajeLlegada:Ikilometraje[];
   acompanante:string|null|mongoose.Types.ObjectId;
   def:string;
+  tarjeta?: string;
   multidestino: boolean;
   destinoExtra: IDestinoExtra[];
   destinoActualIndex: number;
@@ -130,6 +131,7 @@ const tripSchema = new Schema<ITrip>(
 
     acompanante:{type:mongoose.Schema.Types.ObjectId,ref:"User",required:false,default:null},
     def:{type:String , required:true},
+    tarjeta: { type: String, default: "" },
     multidestino: { type: Boolean, default: false },
     destinoExtra: {
       type: [DestinoExtraSchema],
