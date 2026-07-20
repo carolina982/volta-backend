@@ -23,6 +23,8 @@ router.post("/", createUser);
 router.patch("/:id/photo", verifyToken, upload.single("photo"), updateUserPhoto);
 router.patch("/:id", optionalPhotoUpload, updateUser);
 router.delete("/:id", deleteUser);
+// Recuperación activa: POST /api/auth/forgot-password y /api/auth/reset-password (Resend + código).
+// Estas rutas legacy usan Gmail/enlace y no deben usarse desde la app.
 router.post("/forgot-password", forgotPassword);
 router.post("/reset-password/:token", resetPassword);
 

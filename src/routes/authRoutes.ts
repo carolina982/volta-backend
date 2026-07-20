@@ -43,7 +43,7 @@ router.put("/trips/:id", async (req, res) => {
       return res.status(404).json({ message: "Viaje no encontrado" });
     }
 
-    if (user.rol === "admin") {
+    if (String(user.rol || "").toLowerCase() === "admin") {
       Object.assign(trip, req.body);
     } else {
       if (trip.conductorId.toString() !== user._id.toString()) {
