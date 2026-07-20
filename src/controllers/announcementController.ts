@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import fs from "fs";
 import path from "path";
 import Announcement from "../models/Announcement";
+import { notifyAnnouncementPublished } from "../services/notificationService";
 
 const parseFijado = (value: unknown) => {
   if (typeof value === "boolean") return value;
@@ -36,6 +37,14 @@ export const createAnnouncements = async (req: Request, res: Response) => {
       fijado: parseFijado(req.body.fijado),
     });
     await newAnnouncement.save();
+
+    try {
+      const publisherId = (req as any).user?._id || (req as any).user?.id || null;
+      await notifyAnnouncementPublished(newAnnouncement, publisherId);
+    } catch (notifyError) {
+      console.error("Error notificando anuncio nuevo:", notifyError);
+    }
+
     res.status(201).json(newAnnouncement);
   } catch (error) {
     console.error("Error creando anuncio:", error);

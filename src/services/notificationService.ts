@@ -95,3 +95,37 @@ export async function notifyAdminsTripCompleted(
     )
   );
 }
+
+/** Avisa a todos los usuarios (excepto quien publicó) que hay un anuncio nuevo. */
+export async function notifyAnnouncementPublished(
+  announcement: {
+    _id: mongoose.Types.ObjectId | string;
+    titulo: string;
+    contenido: string;
+  },
+  publisherUserId?: string | null
+) {
+  const users = await User.find().select("_id");
+  const title = "Nuevo anuncio";
+  const preview = String(announcement.contenido || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 120);
+  const body = preview
+    ? `${announcement.titulo}: ${preview}${preview.length >= 120 ? "…" : ""}`
+    : String(announcement.titulo || "Se publicó un aviso nuevo");
+
+  const publisher = publisherUserId ? String(publisherUserId) : "";
+
+  await Promise.all(
+    users
+      .filter((u) => String(u._id) !== publisher)
+      .map((u) =>
+        notifyUser(String(u._id), {
+          title,
+          body,
+          type: "announcement_published",
+        })
+      )
+  );
+}
