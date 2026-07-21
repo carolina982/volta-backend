@@ -3,12 +3,69 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getTripCount = exports.deleteTrip = exports.updateTrip = exports.createTrip = exports.getTripById = exports.getTrip = void 0;
+exports.getTripCount = exports.deleteTrip = exports.updateTripOperador = exports.updateTrip = exports.createTrip = exports.getTripById = exports.getTrip = void 0;
 const mongoose_1 = __importDefault(require("mongoose"));
 const Trip_1 = __importDefault(require("../models/Trip"));
-const isOperatorRole = (rol) => {
-    const value = (rol || "").toLowerCase();
-    return value === "chofer" || value === "operador";
+const notificationService_1 = require("../services/notificationService");
+/** Operador / Chofer / Ayudante: solo ven viajes donde participan */
+const isFieldStaffRole = (rol) => {
+    const value = (rol || "").toLowerCase().trim();
+    return (value === "chofer" ||
+        value === "operador" ||
+        value === "ayudante general" ||
+        value === "ayudante");
+};
+const isOperadorRole = (rol) => {
+    const value = (rol || "").toLowerCase().trim();
+    return value === "operador" || value === "chofer";
+};
+const isAyudanteRole = (rol) => {
+    const value = (rol || "").toLowerCase().trim();
+    return value === "ayudante general" || value === "ayudante";
+};
+const isOperatorRole = isFieldStaffRole;
+const userObjectId = (user) => {
+    const raw = user?._id || user?.id;
+    return raw ? new mongoose_1.default.Types.ObjectId(String(raw)) : null;
+};
+/** Operador: solo como conductor. Ayudante: como acompañante (o conductor). */
+const tripAssignedToUserQuery = (userId, rol) => {
+    if (isOperadorRole(rol)) {
+        return {
+            $or: [{ conductorId: userId }, { "destinoExtra.conductorId": userId }],
+        };
+    }
+    if (isAyudanteRole(rol)) {
+        return {
+            $or: [
+                { acompanante: userId },
+                { "destinoExtra.acompanante": userId },
+                { conductorId: userId },
+                { "destinoExtra.conductorId": userId },
+            ],
+        };
+    }
+    return {
+        $or: [
+            { conductorId: userId },
+            { acompanante: userId },
+            { "destinoExtra.conductorId": userId },
+            { "destinoExtra.acompanante": userId },
+        ],
+    };
+};
+const isTripAssignedToUser = (trip, userId, rol) => {
+    const asConductor = String(trip.conductorId) === userId ||
+        (Array.isArray(trip.destinoExtra) &&
+            trip.destinoExtra.some((extra) => extra?.conductorId && String(extra.conductorId) === userId));
+    const asCompanion = (trip.acompanante && String(trip.acompanante) === userId) ||
+        (Array.isArray(trip.destinoExtra) &&
+            trip.destinoExtra.some((extra) => extra?.acompanante && String(extra.acompanante) === userId));
+    if (isOperadorRole(rol))
+        return asConductor;
+    if (isAyudanteRole(rol))
+        return asCompanion || asConductor;
+    return asConductor || asCompanion;
 };
 const getTrip = async (req, res) => {
     try {
@@ -17,13 +74,12 @@ const getTrip = async (req, res) => {
             return res.status(401).json({ message: "Usuario no autenticado" });
         }
         let trips;
-        if (isOperatorRole(user.rol)) {
-            trips = await Trip_1.default.find({
-                conductorId: user.id || user._id,
-            });
+        const uid = userObjectId(user);
+        if (isFieldStaffRole(user.rol) && uid) {
+            trips = await Trip_1.default.find(tripAssignedToUserQuery(uid, user.rol)).populate("asignadoPor", "nombre apellido");
         }
         else {
-            trips = await Trip_1.default.find();
+            trips = await Trip_1.default.find().populate("asignadoPor", "nombre apellido");
         }
         return res.status(200).json(trips);
     }
@@ -35,12 +91,12 @@ const getTrip = async (req, res) => {
 exports.getTrip = getTrip;
 const getTripById = async (req, res) => {
     try {
-        const trip = await Trip_1.default.findById(req.params.id);
+        const trip = await Trip_1.default.findById(req.params.id).populate("asignadoPor", "nombre apellido");
         if (!trip)
             return res.status(404).json({ message: "Viaje no encontrado" });
         const user = req.user;
-        if (isOperatorRole(user?.rol) &&
-            String(trip.conductorId) !== String(user.id)) {
+        const userId = String(user?.id || user?._id || "");
+        if (isFieldStaffRole(user?.rol) && !isTripAssignedToUser(trip, userId, user?.rol)) {
             return res.status(403).json({ message: "No tienes permiso" });
         }
         res.json(trip);
@@ -53,7 +109,7 @@ const getTripById = async (req, res) => {
 exports.getTripById = getTripById;
 const createTrip = async (req, res) => {
     try {
-        const { rutaAcubrir, unidadId, conductorId, fechaSalida, fechaLlegada, destino, estado, kilometrajeSalida, kilometrajeLlegada, acompanante, def, multidestino, destinoExtra, } = req.body;
+        const { rutaAcubrir, unidadId, conductorId, fechaSalida, fechaLlegada, destino, estado, kilometrajeSalida, kilometrajeLlegada, acompanante, def, tarjeta, multidestino, destinoExtra, } = req.body;
         if (!rutaAcubrir || !unidadId || !conductorId || !fechaSalida || !destino || !estado) {
             return res.status(400).json({ message: "Faltan campos obligatorios" });
         }
@@ -80,6 +136,8 @@ const createTrip = async (req, res) => {
                 kilometrajeLlegada: mapKm(item.kilometrajeLlegada),
             }));
         };
+        const user = req.user;
+        const asignadoPorId = user?._id || user?.id || null;
         const newTrip = new Trip_1.default({
             rutaAcubrir,
             unidadId,
@@ -90,13 +148,35 @@ const createTrip = async (req, res) => {
             estado,
             kilometrajeSalida: mapKm(kilometrajeSalida),
             kilometrajeLlegada: mapKm(kilometrajeLlegada),
-            acompanante: (acompanante === "none" || acompanante === "") ? null : acompanante,
+            acompanante: acompanante === "none" || acompanante === "" || !acompanante
+                ? null
+                : new mongoose_1.default.Types.ObjectId(String(acompanante)),
             def: def || "",
+            tarjeta: String(tarjeta || "").trim(),
             multidestino: Boolean(multidestino),
             destinoExtra: Boolean(multidestino) ? normalizeDestinosExtras(destinoExtra) : [],
             destinoActualIndex: 0,
+            asignadoPor: asignadoPorId ? new mongoose_1.default.Types.ObjectId(asignadoPorId) : null,
         });
         await newTrip.save();
+        try {
+            await (0, notificationService_1.notifyTripAssigned)(newTrip);
+            // Notificar acompañantes de destinos extras
+            const extras = Array.isArray(newTrip.destinoExtra) ? newTrip.destinoExtra : [];
+            for (const extra of extras) {
+                if (extra?.acompanante) {
+                    await (0, notificationService_1.notifyCompanionAssigned)({
+                        _id: newTrip._id,
+                        rutaAcubrir: newTrip.rutaAcubrir,
+                        destino: String(extra.destino || newTrip.destino),
+                        acompanante: extra.acompanante,
+                    });
+                }
+            }
+        }
+        catch (notifyError) {
+            console.error("Error enviando notificaciones de asignación:", notifyError);
+        }
         res.status(201).json(newTrip);
     }
     catch (error) {
@@ -111,11 +191,26 @@ const updateTrip = async (req, res) => {
         if (!trip)
             return res.status(404).json({ message: "Viaje no encontrado" });
         const user = req.user;
-        if (isOperatorRole(user?.rol) &&
-            String(trip.conductorId) !== String(user.id || user._id)) {
-            return res.status(403).json({ message: "No tienes permiso" });
+        const userId = String(user?._id || user?.id || "").trim();
+        const conductorIdStr = String(trip.conductorId?._id || trip.conductorId || "").trim();
+        const isAdminUser = String(user?.rol || "").toLowerCase() === "admin";
+        const isMainConductor = Boolean(userId && conductorIdStr && userId === conductorIdStr);
+        const isExtraConductor = Array.isArray(trip.destinoExtra)
+            ? trip.destinoExtra.some((extra) => {
+                const extraId = String(extra?.conductorId?._id || extra?.conductorId || "").trim();
+                return Boolean(userId && extraId && userId === extraId);
+            })
+            : false;
+        const canOperateTrip = isAdminUser || isMainConductor || isExtraConductor;
+        // Solo el conductor asignado (o admin) puede editar / avanzar el viaje
+        if (isFieldStaffRole(user?.rol) && !canOperateTrip) {
+            return res.status(403).json({
+                message: "No tienes permiso para iniciar o actualizar este viaje. Verifica que el viaje esté asignado a tu usuario.",
+            });
         }
-        const { rutaAcubrir, destino, fechaLlegada, fechaSalida, kilometrajeSalida, kilometrajeLlegada, estado, unidadId, conductorId, acompanante, def, multidestino, destinoExtra, destinoActualIndex, } = req.body;
+        const estadoAnterior = trip.estado;
+        const acompananteAnterior = trip.acompanante ? String(trip.acompanante) : null;
+        const { rutaAcubrir, destino, fechaLlegada, fechaSalida, kilometrajeSalida, kilometrajeLlegada, estado, unidadId, conductorId, acompanante, def, tarjeta, multidestino, destinoExtra, destinoActualIndex, } = req.body;
         if (rutaAcubrir !== undefined)
             trip.rutaAcubrir = rutaAcubrir;
         if (destino !== undefined)
@@ -126,6 +221,8 @@ const updateTrip = async (req, res) => {
             trip.estado = estado;
         if (def !== undefined)
             trip.def = def;
+        if (tarjeta !== undefined)
+            trip.tarjeta = String(tarjeta || "").trim();
         if (destinoActualIndex !== undefined) {
             trip.destinoActualIndex = Number(destinoActualIndex) || 0;
         }
@@ -136,8 +233,12 @@ const updateTrip = async (req, res) => {
         if (fechaLlegada !== undefined) {
             trip.fechaLlegada = fechaLlegada ? new Date(fechaLlegada) : null;
         }
-        if (acompanante !== undefined)
-            trip.acompanante = acompanante || null;
+        if (acompanante !== undefined) {
+            trip.acompanante =
+                !acompanante || acompanante === "none"
+                    ? null
+                    : new mongoose_1.default.Types.ObjectId(String(acompanante));
+        }
         if (Array.isArray(kilometrajeSalida)) {
             trip.kilometrajeSalida = kilometrajeSalida;
             trip.markModified('kilometrajeSalida');
@@ -180,7 +281,46 @@ const updateTrip = async (req, res) => {
                 trip.markModified("destinoExtra");
             }
         }
+        // Marca/limpia la hora real de finalización según el cambio de estado.
+        if (estado !== undefined) {
+            const nuevoEstado = String(estado).toLowerCase();
+            const anterior = String(estadoAnterior).toLowerCase();
+            if (nuevoEstado === "completado" && anterior !== "completado") {
+                trip.finalizadoEn = new Date();
+            }
+            else if (nuevoEstado !== "completado" && anterior === "completado") {
+                trip.finalizadoEn = null;
+            }
+        }
         await trip.save();
+        const acompananteNuevo = trip.acompanante ? String(trip.acompanante) : null;
+        if (acompananteNuevo && acompananteNuevo !== acompananteAnterior) {
+            try {
+                await (0, notificationService_1.notifyCompanionAssigned)({
+                    _id: trip._id,
+                    rutaAcubrir: trip.rutaAcubrir,
+                    destino: trip.destino,
+                    acompanante: acompananteNuevo,
+                });
+            }
+            catch (notifyError) {
+                console.error("Error notificando acompañante:", notifyError);
+            }
+        }
+        const estadoNuevo = trip.estado;
+        const seCompleto = String(estadoAnterior).toLowerCase() !== "completado" &&
+            String(estadoNuevo).toLowerCase() === "completado";
+        if (seCompleto) {
+            try {
+                const operatorName = isOperatorRole(user?.rol)
+                    ? [user.nombre, user.apellido].filter(Boolean).join(" ").trim() || "Operador"
+                    : "Un operador";
+                await (0, notificationService_1.notifyAdminsTripCompleted)(trip, operatorName);
+            }
+            catch (notifyError) {
+                console.error("Error enviando notificación de viaje finalizado:", notifyError);
+            }
+        }
         res.json({ message: "Viaje actualizado", trip });
     }
     catch (error) {
@@ -189,13 +329,214 @@ const updateTrip = async (req, res) => {
     }
 };
 exports.updateTrip = updateTrip;
+/** Acciones del operador: iniciar / parada / finalizar (sin validaciones pesadas del form admin). */
+const updateTripOperador = async (req, res) => {
+    try {
+        const tripId = String(req.params.id || "").trim();
+        if (!tripId || !mongoose_1.default.Types.ObjectId.isValid(tripId)) {
+            return res.status(400).json({ message: "ID de viaje inválido" });
+        }
+        const user = req.user;
+        if (!user) {
+            return res.status(401).json({ message: "Usuario no autenticado" });
+        }
+        const isAdminUser = String(user?.rol || "").toLowerCase() === "admin";
+        const uid = userObjectId(user);
+        // Misma regla que el listado: si el viaje aparece en "Mis viajes", puede iniciarlo.
+        let trip;
+        if (isAdminUser) {
+            trip = await Trip_1.default.findById(tripId);
+        }
+        else if (isFieldStaffRole(user.rol) && uid) {
+            trip = await Trip_1.default.findOne({
+                _id: tripId,
+                ...tripAssignedToUserQuery(uid, user.rol),
+            });
+            if (!trip) {
+                // Puede existir pero no estar asignado a este usuario
+                const exists = await Trip_1.default.exists({ _id: tripId });
+                if (!exists)
+                    return res.status(404).json({ message: "Viaje no encontrado" });
+                return res.status(403).json({
+                    message: "No tienes permiso para iniciar este viaje. Debe estar asignado a tu usuario como operador.",
+                });
+            }
+        }
+        else {
+            return res.status(403).json({ message: "No tienes permiso" });
+        }
+        if (!trip)
+            return res.status(404).json({ message: "Viaje no encontrado" });
+        const estadoAnterior = trip.estado;
+        const { estado, destinoActualIndex, fechaSalida, fechaLlegada, multidestino, destinoExtra, checklistInicio, checklistRecepcion, checklistFin, checklistParada, } = req.body || {};
+        const $set = {};
+        const normalizeChecklist = (raw) => {
+            if (!raw || typeof raw !== "object")
+                return undefined;
+            const items = Array.isArray(raw.items)
+                ? raw.items.map((it) => ({
+                    id: String(it?.id || ""),
+                    label: String(it?.label || ""),
+                    checked: Boolean(it?.checked),
+                }))
+                : [];
+            return {
+                items,
+                extras: raw.extras != null ? String(raw.extras) : "",
+                completadoEn: raw.completadoEn ? new Date(raw.completadoEn) : new Date(),
+            };
+        };
+        if (estado !== undefined) {
+            const allowed = ["pendiente", "en progreso", "en parada", "completado"];
+            if (!allowed.includes(String(estado))) {
+                return res.status(400).json({ message: "Estado no válido" });
+            }
+            $set.estado = String(estado);
+        }
+        if (destinoActualIndex !== undefined && destinoActualIndex !== null && destinoActualIndex !== "") {
+            const idx = Number(destinoActualIndex);
+            if (!Number.isInteger(idx) || idx < 0) {
+                return res.status(400).json({ message: "Índice de destino inválido" });
+            }
+            $set.destinoActualIndex = idx;
+        }
+        if (fechaSalida) {
+            const d = new Date(fechaSalida);
+            if (Number.isNaN(d.getTime())) {
+                return res.status(400).json({ message: "Fecha de salida inválida" });
+            }
+            $set.fechaSalida = d;
+        }
+        if (fechaLlegada !== undefined) {
+            if (!fechaLlegada) {
+                $set.fechaLlegada = null;
+            }
+            else {
+                const d = new Date(fechaLlegada);
+                if (Number.isNaN(d.getTime())) {
+                    return res.status(400).json({ message: "Fecha de llegada inválida" });
+                }
+                $set.fechaLlegada = d;
+            }
+        }
+        if (multidestino !== undefined) {
+            $set.multidestino = Boolean(multidestino);
+        }
+        if (destinoExtra !== undefined) {
+            const list = Array.isArray(destinoExtra) ? destinoExtra : destinoExtra ? [destinoExtra] : [];
+            $set.destinoExtra = list.map((item) => ({
+                destino: String(item.destino || ""),
+                fechaSalida: item.fechaSalida ? new Date(item.fechaSalida) : null,
+                fechaLlegada: item.fechaLlegada ? new Date(item.fechaLlegada) : null,
+                conductorId: item.conductorId && mongoose_1.default.Types.ObjectId.isValid(String(item.conductorId))
+                    ? new mongoose_1.default.Types.ObjectId(String(item.conductorId))
+                    : null,
+                unidadId: String(item.unidadId || ""),
+                acompanante: item.acompanante &&
+                    item.acompanante !== "none" &&
+                    mongoose_1.default.Types.ObjectId.isValid(String(item.acompanante))
+                    ? new mongoose_1.default.Types.ObjectId(String(item.acompanante))
+                    : null,
+                kilometrajeSalida: Array.isArray(item.kilometrajeSalida)
+                    ? item.kilometrajeSalida.map((km) => ({
+                        numero: Number(km.numero),
+                        descripcion: km.descripcion || "",
+                    }))
+                    : [],
+                kilometrajeLlegada: Array.isArray(item.kilometrajeLlegada)
+                    ? item.kilometrajeLlegada.map((km) => ({
+                        numero: Number(km.numero),
+                        descripcion: km.descripcion || "",
+                    }))
+                    : [],
+            }));
+        }
+        if (checklistInicio !== undefined) {
+            const normalized = normalizeChecklist(checklistInicio);
+            if (normalized)
+                $set.checklistInicio = normalized;
+        }
+        if (checklistRecepcion !== undefined) {
+            const normalized = normalizeChecklist(checklistRecepcion);
+            if (normalized)
+                $set.checklistRecepcion = normalized;
+        }
+        if (checklistFin !== undefined) {
+            const normalized = normalizeChecklist(checklistFin);
+            if (normalized)
+                $set.checklistFin = normalized;
+        }
+        // Checklist de una parada (multidestino): se agrega al historial de paradas.
+        const $push = {};
+        if (checklistParada !== undefined) {
+            const normalized = normalizeChecklist(checklistParada);
+            if (normalized) {
+                const recepcionParada = normalizeChecklist(checklistParada?.recepcion);
+                $push.checklistParadas = {
+                    ...normalized,
+                    index: Number(checklistParada?.index) || 0,
+                    destino: String(checklistParada?.destino || ""),
+                    recepcion: recepcionParada || null,
+                };
+            }
+        }
+        // Marca la hora real de finalización al pasar a "completado" (y la limpia si se reabre).
+        if ($set.estado !== undefined) {
+            const nuevoEstado = String($set.estado).toLowerCase();
+            const anterior = String(estadoAnterior).toLowerCase();
+            if (nuevoEstado === "completado" && anterior !== "completado") {
+                $set.finalizadoEn = new Date();
+            }
+            else if (nuevoEstado !== "completado" && anterior === "completado") {
+                $set.finalizadoEn = null;
+            }
+        }
+        if (Object.keys($set).length === 0 && Object.keys($push).length === 0) {
+            return res.status(400).json({ message: "No hay cambios para aplicar" });
+        }
+        const updateOps = {};
+        if (Object.keys($set).length > 0)
+            updateOps.$set = $set;
+        if (Object.keys($push).length > 0)
+            updateOps.$push = $push;
+        const updated = await Trip_1.default.findByIdAndUpdate(tripId, updateOps, {
+            new: true,
+            runValidators: false,
+        });
+        if (!updated) {
+            return res.status(404).json({ message: "Viaje no encontrado" });
+        }
+        const estadoNuevo = updated.estado;
+        const seCompleto = String(estadoAnterior).toLowerCase() !== "completado" &&
+            String(estadoNuevo).toLowerCase() === "completado";
+        if (seCompleto) {
+            try {
+                const operatorName = isOperatorRole(user?.rol)
+                    ? [user.nombre, user.apellido].filter(Boolean).join(" ").trim() || "Operador"
+                    : "Un operador";
+                await (0, notificationService_1.notifyAdminsTripCompleted)(updated, operatorName);
+            }
+            catch (notifyError) {
+                console.error("Error enviando notificación de viaje finalizado:", notifyError);
+            }
+        }
+        return res.json({ message: "Viaje actualizado", trip: updated });
+    }
+    catch (error) {
+        console.error("Error actualizando viaje (operador):", error);
+        return res.status(500).json({
+            message: error?.message || "Error al actualizar viaje",
+        });
+    }
+};
+exports.updateTripOperador = updateTripOperador;
 const deleteTrip = async (req, res) => {
     try {
         const trip = await Trip_1.default.findById(req.params.id);
         if (!trip)
             return res.status(404).json({ message: "Viaje no encontrado" });
         const user = req.user;
-        if (isOperatorRole(user?.rol) &&
+        if (isFieldStaffRole(user?.rol) &&
             String(trip.conductorId) !== String(user.id || user._id)) {
             return res.status(403).json({ message: "No tienes permiso" });
         }

@@ -34,13 +34,21 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
-const announcementSchema = new mongoose_1.Schema({
-    titulo: { type: String, required: true },
-    contenido: { type: String, required: true },
-    fecha: { type: Date, default: Date.now },
-    image: { type: String },
-    autor: { type: String, default: "Administración" },
-    autorPhotoUrl: { type: String, default: null },
-    fijado: { type: Boolean, default: false },
+const notificationSchema = new mongoose_1.Schema({
+    userId: { type: mongoose_1.Schema.Types.ObjectId, ref: "User", required: true, index: true },
+    title: { type: String, required: true },
+    body: { type: String, required: true },
+    type: {
+        type: String,
+        enum: [
+            "trip_assigned",
+            "companion_assigned",
+            "trip_completed",
+            "announcement_published",
+        ],
+        required: true,
+    },
+    tripId: { type: mongoose_1.Schema.Types.ObjectId, ref: "Trip", default: null },
+    read: { type: Boolean, default: false, index: true },
 }, { timestamps: true });
-exports.default = mongoose_1.default.model("Announcement", announcementSchema);
+exports.default = mongoose_1.default.model("Notification", notificationSchema);

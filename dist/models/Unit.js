@@ -34,6 +34,15 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
+const InventarioSchema = new mongoose_1.Schema({
+    contenido: { type: String, default: "" },
+    firmaUrl: { type: String, default: "" },
+    operadorId: { type: mongoose_1.Schema.Types.ObjectId, ref: "User", default: null },
+    operadorNombre: { type: String, default: "" },
+    creadoPorId: { type: mongoose_1.Schema.Types.ObjectId, ref: "User", default: null },
+    creadoPorNombre: { type: String, default: "" },
+    fecha: { type: Date, default: Date.now },
+}, { _id: true });
 const uniSchema = new mongoose_1.Schema({
     nombre: { type: String, required: true },
     placas: { type: String, required: true },
@@ -43,13 +52,7 @@ const uniSchema = new mongoose_1.Schema({
     tipoRemolque: { type: String, enum: ["Lowboy", "Caja Seca", ""], default: "" },
     placaRemolque: { type: String, default: "" },
     imagenUrl: { type: String, default: "" },
-    inventarios: [
-        {
-            archivo: { type: String, required: true },
-            conductorId: { type: mongoose_1.Schema.Types.ObjectId, ref: "User" },
-            fecha: { type: Date, default: Date.now }
-        }
-    ],
+    inventarios: { type: [InventarioSchema], default: [] },
 }, { timestamps: true });
 uniSchema.set("toJSON", {
     virtuals: true,

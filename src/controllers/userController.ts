@@ -292,7 +292,7 @@ export const loginUser = async (req: Request, res: Response) => {
       apellidoMaterno: user.apellidoMaterno || "",
       email: user.email,
       rol: user.rol,
-      activo: user.activo !== false,
+      activo: true,
       photoUrl: user.photoUrl || null,
       contacto: user.contacto,
       token,

@@ -7,9 +7,17 @@ exports.deleteAnnouncement = exports.updateAnnouncement = exports.createAnnounce
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const Announcement_1 = __importDefault(require("../models/Announcement"));
+const notificationService_1 = require("../services/notificationService");
+const parseFijado = (value) => {
+    if (typeof value === "boolean")
+        return value;
+    if (typeof value === "string")
+        return value.toLowerCase() === "true" || value === "1";
+    return false;
+};
 const getAnnouncements = async (req, res) => {
     try {
-        const announcements = await Announcement_1.default.find().sort({ fecha: -1 });
+        const announcements = await Announcement_1.default.find().sort({ fijado: -1, fecha: -1 });
         res.json(announcements);
     }
     catch (error) {
@@ -20,9 +28,7 @@ const getAnnouncements = async (req, res) => {
 exports.getAnnouncements = getAnnouncements;
 const createAnnouncements = async (req, res) => {
     try {
-        console.log("Body recibido:", req.body);
-        console.log("Archivo recibido:", req.file);
-        const { titulo, contenido } = req.body;
+        const { titulo, contenido, autor, autorPhotoUrl } = req.body;
         if (!titulo || !contenido) {
             return res.status(400).json({ message: "Faltan campos obligatorios" });
         }
@@ -32,8 +38,18 @@ const createAnnouncements = async (req, res) => {
             contenido,
             fecha: new Date(),
             image: imagePath,
+            autor: (autor || "Administración").trim(),
+            autorPhotoUrl: autorPhotoUrl || null,
+            fijado: parseFijado(req.body.fijado),
         });
         await newAnnouncement.save();
+        try {
+            const publisherId = req.user?._id || req.user?.id || null;
+            await (0, notificationService_1.notifyAnnouncementPublished)(newAnnouncement, publisherId);
+        }
+        catch (notifyError) {
+            console.error("Error notificando anuncio nuevo:", notifyError);
+        }
         res.status(201).json(newAnnouncement);
     }
     catch (error) {
@@ -44,7 +60,7 @@ const createAnnouncements = async (req, res) => {
 exports.createAnnouncements = createAnnouncements;
 const updateAnnouncement = async (req, res) => {
     try {
-        const { titulo, contenido } = req.body;
+        const { titulo, contenido, autor, autorPhotoUrl } = req.body;
         const { id } = req.params;
         const existing = await Announcement_1.default.findById(id);
         if (!existing) {
@@ -61,6 +77,12 @@ const updateAnnouncement = async (req, res) => {
         }
         existing.titulo = titulo || existing.titulo;
         existing.contenido = contenido || existing.contenido;
+        if (autor !== undefined)
+            existing.autor = String(autor).trim() || existing.autor;
+        if (autorPhotoUrl !== undefined)
+            existing.autorPhotoUrl = autorPhotoUrl || null;
+        if (req.body.fijado !== undefined)
+            existing.fijado = parseFijado(req.body.fijado);
         await existing.save();
         res.json(existing);
     }

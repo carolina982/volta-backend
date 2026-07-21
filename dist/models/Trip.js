@@ -54,6 +54,24 @@ const DestinoExtraSchema = new mongoose_1.Schema({
         },
     ],
 }, { _id: false });
+const ChecklistItemSchema = new mongoose_1.Schema({
+    id: { type: String, default: "" },
+    label: { type: String, default: "" },
+    checked: { type: Boolean, default: false },
+}, { _id: false });
+const ChecklistSchema = new mongoose_1.Schema({
+    items: { type: [ChecklistItemSchema], default: [] },
+    extras: { type: String, default: "" },
+    completadoEn: { type: Date, default: null },
+}, { _id: false });
+const ChecklistParadaSchema = new mongoose_1.Schema({
+    index: { type: Number, default: 0 },
+    destino: { type: String, default: "" },
+    items: { type: [ChecklistItemSchema], default: [] },
+    extras: { type: String, default: "" },
+    completadoEn: { type: Date, default: null },
+    recepcion: { type: ChecklistSchema, default: null },
+}, { _id: false });
 const tripSchema = new mongoose_1.Schema({
     rutaAcubrir: { type: String, required: true },
     destino: { type: String, required: true },
@@ -76,6 +94,7 @@ const tripSchema = new mongoose_1.Schema({
         },],
     acompanante: { type: mongoose_1.default.Schema.Types.ObjectId, ref: "User", required: false, default: null },
     def: { type: String, required: true },
+    tarjeta: { type: String, default: "" },
     multidestino: { type: Boolean, default: false },
     destinoExtra: {
         type: [DestinoExtraSchema],
@@ -91,5 +110,16 @@ const tripSchema = new mongoose_1.Schema({
         },
     },
     destinoActualIndex: { type: Number, default: 0 },
+    asignadoPor: {
+        type: mongoose_1.default.Schema.Types.ObjectId,
+        ref: "User",
+        required: false,
+        default: null,
+    },
+    checklistInicio: { type: ChecklistSchema, default: null },
+    checklistRecepcion: { type: ChecklistSchema, default: null },
+    checklistFin: { type: ChecklistSchema, default: null },
+    checklistParadas: { type: [ChecklistParadaSchema], default: [] },
+    finalizadoEn: { type: Date, default: null },
 }, { timestamps: true });
 exports.default = mongoose_1.default.model("Trip", tripSchema);

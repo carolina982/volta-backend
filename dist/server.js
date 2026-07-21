@@ -12,6 +12,7 @@ const dotenv_1 = __importDefault(require("dotenv"));
 dotenv_1.default.config();
 const announcementRoutes_1 = __importDefault(require("./routes/announcementRoutes"));
 const authRoutes_1 = __importDefault(require("./routes/authRoutes"));
+const notificationRoutes_1 = __importDefault(require("./routes/notificationRoutes"));
 const tripRoutes_1 = __importDefault(require("./routes/tripRoutes"));
 const unitRoutes_1 = __importDefault(require("./routes/unitRoutes"));
 const userRoutes_1 = __importDefault(require("./routes/userRoutes"));
@@ -30,9 +31,11 @@ app.use((0, cors_1.default)({
     allowedHeaders: ["Content-Type", "Authorization"],
 }));
 app.options("*", (0, cors_1.default)());
-app.use(express_1.default.json());
+app.use(express_1.default.json({ limit: "8mb" }));
+app.use(express_1.default.urlencoded({ limit: "8mb", extended: true }));
 app.use("/uploads", express_1.default.static(uploadsPath));
 app.use("/api/users", userRoutes_1.default);
+app.use("/api/notifications", notificationRoutes_1.default);
 app.use("/api/trips", tripRoutes_1.default);
 app.use("/api/units", unitRoutes_1.default);
 app.use("/api/viatics", viaticRoutes_1.default);

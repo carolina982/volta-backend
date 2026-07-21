@@ -6,11 +6,15 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getViaticCount = exports.deleteViatic = exports.updateViatic = exports.createViatic = exports.getViaticByTrip = exports.getViaticById = exports.getViatic = void 0;
 const Trip_1 = __importDefault(require("../models/Trip"));
 const Viatic_1 = __importDefault(require("../models/Viatic"));
+const isOperatorRole = (rol) => {
+    const value = (rol || "").toLowerCase();
+    return value === "operador" || value === "chofer";
+};
 const getViatic = async (req, res) => {
     try {
         const user = req.user;
         let viatics;
-        if (user?.rol === "Chofer") {
+        if (isOperatorRole(user?.rol)) {
             const trips = await Trip_1.default.find({ conductorId: user.id });
             const tripsIds = trips.map(t => t._id);
             viatics = await Viatic_1.default.find({ tripId: { $in: tripsIds } })
@@ -46,7 +50,7 @@ const getViaticById = async (req, res) => {
             return res.status(404).json({ message: "Viatico no econtrado" });
         }
         const user = req.user;
-        if (user?.rol === "Chofer") {
+        if (isOperatorRole(user?.rol)) {
             const trip = viatic.tripId;
             if (trip.conductorId._id.toString() !== user.id.toString()) {
                 return res.status(403).json({ message: "No tienes permisos" });
@@ -65,7 +69,7 @@ const getViaticByTrip = async (req, res) => {
         const tripId = req.params.tripId;
         const user = req.user;
         const trip = await Trip_1.default.findById(tripId);
-        if (user?.rol === "Chofer" && (!trip || trip.conductorId.toString() !== user.id.toString())) {
+        if (isOperatorRole(user?.rol) && (!trip || trip.conductorId.toString() !== user.id.toString())) {
             return res.status(403).json({ message: "No tienes permisos para ver estos viáticos" });
         }
         const viatics = await Viatic_1.default.find({ tripId });
@@ -173,7 +177,7 @@ const deleteViatic = async (req, res) => {
         if (!viatic)
             return res.status(404).json({ message: "Viático no encontrado" });
         const user = req.user;
-        if (user?.rol === "Chofer") {
+        if (isOperatorRole(user?.rol)) {
             const trip = await Trip_1.default.findById(viatic.tripId);
             if (!trip || trip.conductorId.toString() !== user.id.toString()) {
                 return res.status(403).json({ message: "No tienes permisos para eliminar este viático" });
