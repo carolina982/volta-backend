@@ -3,6 +3,7 @@ import mongoose, { Document, Schema } from "mongoose";
 export type NotificationType =
   | "trip_assigned"
   | "companion_assigned"
+  | "trip_started"
   | "trip_completed"
   | "announcement_published";
 
@@ -27,6 +28,7 @@ const notificationSchema = new Schema<INotification>(
       enum: [
         "trip_assigned",
         "companion_assigned",
+        "trip_started",
         "trip_completed",
         "announcement_published",
       ],

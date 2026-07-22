@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import Trip from "../models/Trip";
 import {
   notifyAdminsTripCompleted,
+  notifyAdminsTripStarted,
   notifyCompanionAssigned,
   notifyTripAssigned,
 } from "../services/notificationService";
@@ -29,6 +30,13 @@ const isAyudanteRole = (rol?: string) => {
 };
 
 const isOperatorRole = isFieldStaffRole;
+
+const operatorDisplayName = (user: any) => {
+  if (isOperatorRole(user?.rol)) {
+    return [user?.nombre, user?.apellido].filter(Boolean).join(" ").trim() || "Operador";
+  }
+  return "Un operador";
+};
 
 const userObjectId = (user: any) => {
   const raw = user?._id || user?.id;
@@ -374,18 +382,18 @@ export const updateTrip = async (req: Request, res: Response) => {
     }
 
     const estadoNuevo = trip.estado;
-    const seCompleto =
-      String(estadoAnterior).toLowerCase() !== "completado" &&
-      String(estadoNuevo).toLowerCase() === "completado";
+    const anteriorNorm = String(estadoAnterior).toLowerCase();
+    const nuevoNorm = String(estadoNuevo).toLowerCase();
+    const seInicio = anteriorNorm === "pendiente" && nuevoNorm === "en progreso";
+    const seCompleto = anteriorNorm !== "completado" && nuevoNorm === "completado";
 
-    if (seCompleto) {
+    if (seInicio || seCompleto) {
       try {
-        const operatorName = isOperatorRole(user?.rol)
-          ? [user.nombre, user.apellido].filter(Boolean).join(" ").trim() || "Operador"
-          : "Un operador";
-        await notifyAdminsTripCompleted(trip, operatorName);
+        const operatorName = operatorDisplayName(user);
+        if (seInicio) await notifyAdminsTripStarted(trip, operatorName);
+        if (seCompleto) await notifyAdminsTripCompleted(trip, operatorName);
       } catch (notifyError) {
-        console.error("Error enviando notificación de viaje finalizado:", notifyError);
+        console.error("Error enviando notificación de estado de viaje:", notifyError);
       }
     }
 
@@ -601,18 +609,18 @@ export const updateTripOperador = async (req: Request, res: Response) => {
     }
 
     const estadoNuevo = updated.estado;
-    const seCompleto =
-      String(estadoAnterior).toLowerCase() !== "completado" &&
-      String(estadoNuevo).toLowerCase() === "completado";
+    const anteriorNorm = String(estadoAnterior).toLowerCase();
+    const nuevoNorm = String(estadoNuevo).toLowerCase();
+    const seInicio = anteriorNorm === "pendiente" && nuevoNorm === "en progreso";
+    const seCompleto = anteriorNorm !== "completado" && nuevoNorm === "completado";
 
-    if (seCompleto) {
+    if (seInicio || seCompleto) {
       try {
-        const operatorName = isOperatorRole(user?.rol)
-          ? [user.nombre, user.apellido].filter(Boolean).join(" ").trim() || "Operador"
-          : "Un operador";
-        await notifyAdminsTripCompleted(updated, operatorName);
+        const operatorName = operatorDisplayName(user);
+        if (seInicio) await notifyAdminsTripStarted(updated, operatorName);
+        if (seCompleto) await notifyAdminsTripCompleted(updated, operatorName);
       } catch (notifyError) {
-        console.error("Error enviando notificación de viaje finalizado:", notifyError);
+        console.error("Error enviando notificación de estado de viaje:", notifyError);
       }
     }
 
